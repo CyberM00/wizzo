@@ -44,8 +44,13 @@ def _git(repo: Path, *args: str, timeout: int = GIT_TIMEOUT) -> tuple[int, str]:
     return result.returncode, (result.stdout + result.stderr).strip()
 
 
-def check_and_update(repo: Path, enabled: bool = True) -> dict:
-    """Fast-forward the working copy to its upstream if it is safely possible."""
+def check_and_update(repo: Path, enabled: bool = True, dry_run: bool = False) -> dict:
+    """Fast-forward the working copy to its upstream if it is safely possible.
+
+    With ``dry_run`` the check runs exactly as normal but stops short of pulling,
+    reporting status ``available`` when an update is waiting. Nothing in the
+    working copy is touched.
+    """
     outcome = {
         "attempted": False,
         "updated": False,
@@ -140,6 +145,19 @@ def check_and_update(repo: Path, enabled: bool = True) -> dict:
     _, changed = _git(repo, "diff", "--name-only", "HEAD..@{u}")
     changed_files = changed.splitlines() if changed else []
 
+    if dry_run:
+        outcome.update(
+            {
+                "status": "available",
+                "message": f"{behind} update(s) available on {upstream}.",
+                "commits": subjects.splitlines() if subjects else [],
+                "requirements_changed": any(
+                    f.strip() == "requirements.txt" for f in changed_files
+                ),
+            }
+        )
+        return outcome
+
     code, pull_out = _git(repo, "pull", "--ff-only", "--quiet")
     if code != 0:
         outcome["status"] = "error"
@@ -166,7 +184,7 @@ def check_and_update(repo: Path, enabled: bool = True) -> dict:
 def describe(outcome: dict) -> list[str]:
     """Console lines summarising an update attempt."""
     lines: list[str] = []
-    if outcome["status"] == "updated":
+    if outcome["status"] in ("updated", "available"):
         lines.append(f"  update:  {outcome['message']}")
         for subject in outcome["commits"][:6]:
             lines.append(f"             {subject}")
@@ -174,6 +192,8 @@ def describe(outcome: dict) -> list[str]:
             lines.append(f"             ... and {len(outcome['commits']) - 6} more")
         if outcome["requirements_changed"]:
             lines.append("  NOTE:    requirements.txt changed -- run: pip install -r requirements.txt")
+        if outcome["status"] == "available":
+            lines.append("           Start the board without --check-update to apply.")
     elif outcome["status"] in ("up-to-date", "already-updated"):
         lines.append(f"  update:  {outcome['message']}")
     elif outcome["status"] != "disabled":

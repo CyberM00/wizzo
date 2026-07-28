@@ -29,7 +29,8 @@ it explicitly:
 python kneeboard.py --bms-path "D:\Falcon BMS 4.38"
 ```
 
-Other options: `--port` (default 5000), `--host`, `--no-browser`, `--no-update`.
+Other options: `--port` (default 5000), `--host`, `--no-browser`, `--no-update`,
+`--check-update` (report whether an update is waiting, then exit).
 
 ## Keeping it up to date
 

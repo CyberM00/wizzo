@@ -116,9 +116,20 @@ def main() -> int:
     parser.add_argument(
         "--no-update", action="store_true", help="skip the check for a newer version"
     )
+    parser.add_argument(
+        "--check-update",
+        action="store_true",
+        help="report whether an update is available, then exit without changing anything",
+    )
     args = parser.parse_args()
 
     print(f"BMS Kneeboard {__version__}")
+
+    if args.check_update:
+        result = check_and_update(APP_ROOT, enabled=True, dry_run=True)
+        for line in describe(result) or ["  update:  Nothing to report."]:
+            print(line)
+        return 0
 
     update_info = check_and_update(APP_ROOT, enabled=not args.no_update)
     for line in describe(update_info):
