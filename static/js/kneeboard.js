@@ -918,8 +918,23 @@ function renderStatus() {
   const install = DATA.install || {};
   sub.textContent = `BMS ${install.version || "?"}`;
   fresh.innerHTML = '<span class="live">&#9679; live</span>';
+
   const b = DATA.briefing || {};
-  gen.textContent = b.generated ? `brief ${b.generated}` : "no briefing yet";
+  const app = DATA.app || {};
+  const upd = app.update || {};
+
+  // Version line, plus a warning when self-update is not actually working.
+  const build = upd.local_version ? ` · ${upd.local_version}` : "";
+  const stalled = ["skipped-dirty", "skipped-local-commits", "not-a-repo", "no-git"];
+  const versionLine = stalled.includes(upd.status)
+    ? `<span class="stale">v${esc(app.version || "?")}${esc(build)} · not auto-updating</span>`
+    : `v${esc(app.version || "?")}${esc(build)}${
+        upd.status === "updated" ? ' <span class="live">· updated</span>' : ""
+      }`;
+
+  gen.innerHTML =
+    (b.generated ? `brief ${esc(b.generated)}` : "no briefing yet") +
+    `<br>${versionLine}`;
 }
 
 async function load(force = false) {

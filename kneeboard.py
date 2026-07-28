@@ -11,6 +11,7 @@ changes, so committing to a new mission is all it takes to refresh.
 from __future__ import annotations
 
 import argparse
+import os
 import socket
 import sys
 import webbrowser
@@ -20,10 +21,14 @@ from flask import Flask, abort, jsonify, render_template, request, send_file
 
 from bmskb import __version__
 from bmskb.install import BmsInstall
+from bmskb.selfupdate import REEXEC_GUARD, check_and_update, describe
 from bmskb.state import KneeboardState, validate_laser_code
+
+APP_ROOT = Path(__file__).resolve().parent
 
 app = Flask(__name__)
 state: KneeboardState | None = None
+update_info: dict = {}
 
 
 def _serve_from(root: Path | None, relative: str):
@@ -50,7 +55,9 @@ def index():
 @app.route("/api/state")
 def api_state():
     assert state is not None
-    return jsonify(state.get(force=request.args.get("force") == "1"))
+    payload = dict(state.get(force=request.args.get("force") == "1"))
+    payload["app"] = {"version": __version__, "update": update_info}
+    return jsonify(payload)
 
 
 @app.route("/api/token")
@@ -99,19 +106,39 @@ def _lan_address() -> str:
 
 
 def main() -> int:
-    global state
+    global state, update_info
 
     parser = argparse.ArgumentParser(description="Falcon BMS second-monitor kneeboard")
     parser.add_argument("--host", default="0.0.0.0", help="bind address (default: all interfaces)")
     parser.add_argument("--port", type=int, default=5000, help="port (default: 5000)")
     parser.add_argument("--bms-path", default=None, help="override the BMS install path")
     parser.add_argument("--no-browser", action="store_true", help="do not open a browser")
+    parser.add_argument(
+        "--no-update", action="store_true", help="skip the check for a newer version"
+    )
     args = parser.parse_args()
+
+    print(f"BMS Kneeboard {__version__}")
+
+    update_info = check_and_update(APP_ROOT, enabled=not args.no_update)
+    for line in describe(update_info):
+        print(line)
+
+    # The code for this run was already imported, so hand off to a fresh process
+    # to actually run what was just pulled. The guard variable makes this a
+    # one-shot: the restarted process will not check again.
+    if update_info.get("updated"):
+        print("  restart: relaunching on the updated version...\n")
+        os.environ[REEXEC_GUARD] = "1"
+        try:
+            os.execv(sys.executable, [sys.executable, *sys.argv])
+        except OSError as exc:
+            print(f"  NOTE:    could not restart automatically ({exc}).")
+            print("           The update applies the next time you start the board.\n")
 
     install = BmsInstall.discover(args.bms_path)
     state = KneeboardState(install)
 
-    print(f"BMS Kneeboard {__version__}")
     if install:
         print(f"  BMS {install.version} at {install.base}")
         print(f"  theater: {install.theater or 'unknown'}")

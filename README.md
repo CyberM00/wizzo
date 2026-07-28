@@ -20,6 +20,8 @@ python kneeboard.py
 
 Then drag the browser window to your second monitor and press **F11**.
 
+On Windows you can also just double-click **`start-kneeboard.bat`**.
+
 The BMS install is found automatically from the registry. If that fails, point at
 it explicitly:
 
@@ -27,7 +29,34 @@ it explicitly:
 python kneeboard.py --bms-path "D:\Falcon BMS 4.38"
 ```
 
-Other options: `--port` (default 5000), `--host`, `--no-browser`.
+Other options: `--port` (default 5000), `--host`, `--no-browser`, `--no-update`.
+
+## Keeping it up to date
+
+The board updates itself. On every start it checks GitHub, fast-forwards the
+working copy if there is something new, and relaunches on the updated version
+before serving anything. Push a change from anywhere — including Claude Code on
+web from a phone — and the next launch on the desktop picks it up.
+
+The current version and commit are shown at the bottom of the sidebar.
+
+This only works if the folder is a **git clone**. If you copied the files rather
+than cloning, there is no remote to update from; the sidebar will say
+`not auto-updating`.
+
+Updating is deliberately cautious and never destructive. It is skipped, with the
+reason printed, when:
+
+- there are uncommitted changes in the working copy — your edits are never touched
+- there are local commits that were not pushed, so a fast-forward is impossible
+- GitHub is unreachable — the board runs on what it has
+
+Only fast-forward pulls are performed, so an update cannot rewrite history,
+discard a change, or leave a merge conflict behind. Skip the check entirely with
+`--no-update`.
+
+If an update changes `requirements.txt`, the console says so and you should run
+`pip install -r requirements.txt` again.
 
 ## Pages
 
@@ -107,6 +136,7 @@ standard Viper procedures. They are a reference, not certified release tables.
 
 ```
 kneeboard.py              entry point and Flask routes
+start-kneeboard.bat       double-click launcher
 bmskb/
   install.py              BMS discovery (registry, env var, drive scan) and encoding handling
   briefing.py             briefing.txt parser
@@ -114,6 +144,7 @@ bmskb/
   weapons.py              WCD weapon data joined to the curated library
   charts.py               chart and map indexing, ICAO matching
   state.py                payload assembly, caching, change detection, validation
+  selfupdate.py           safe fast-forward self-update on startup
   data/f16_stores.json    curated F-16 store reference
 templates/index.html      page shell
 static/css, static/js     styling and renderer
