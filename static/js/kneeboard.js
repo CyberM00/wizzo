@@ -1,0 +1,957 @@
+/* Falcon BMS kneeboard front end.
+ *
+ * Fetches the parsed briefing from /api/state and renders it as tabbed pages.
+ * A light /api/token poll detects BMS rewriting briefing.txt and reloads.
+ */
+
+"use strict";
+
+const TABS = [
+  { id: "brief", label: "Brief" },
+  { id: "loadout", label: "Loadout" },
+  { id: "steer", label: "Steer" },
+  { id: "comms", label: "Comms" },
+  { id: "threats", label: "Threats" },
+  { id: "wx", label: "Weather" },
+  { id: "charts", label: "Charts" },
+  { id: "maps", label: "Maps" },
+];
+
+let DATA = null;
+let activeTab = localStorage.getItem("kb.tab") || "brief";
+let lastToken = null;
+const viewerChoice = {};
+
+/* ------------------------------------------------------------- helpers */
+
+const esc = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
+  );
+
+/** Treat BMS's "--" placeholder as empty. */
+const val = (text) => {
+  const t = String(text ?? "").trim();
+  return !t || t === "--" ? "" : t;
+};
+
+const dim = (text) => (val(text) ? esc(text) : '<span class="dim">&mdash;</span>');
+
+const card = (title, body, cls = "") =>
+  `<div class="card ${cls}">${title ? `<h3>${esc(title)}</h3>` : ""}${body}</div>`;
+
+const stat = (title, value, sub = "", tone = "") =>
+  card(
+    title,
+    `<div class="value ${tone}${String(value).length > 13 ? " small" : ""}">${
+      val(value) ? esc(value) : "&mdash;"
+    }</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ""}`,
+    "stat"
+  );
+
+const kv = (pairs) =>
+  `<dl class="kv">${pairs
+    .filter(([, v]) => val(v))
+    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`)
+    .join("")}</dl>`;
+
+function table(headers, rows, opts = {}) {
+  if (!rows.length) return `<div class="empty">${esc(opts.empty || "No data.")}</div>`;
+  const head = headers.map((h) => `<th>${esc(h)}</th>`).join("");
+  const body = rows
+    .map((cells) => `<tr>${cells.map((c) => `<td>${c}</td>`).join("")}</tr>`)
+    .join("");
+  return `<div class="scroll-x"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+function prose(groups, empty = "Nothing recorded.") {
+  if (!groups || !groups.length) return `<div class="empty">${esc(empty)}</div>`;
+  return `<div class="prose">${groups
+    .map((group) => {
+      const heading = group.heading ? `<h4>${esc(group.heading)}</h4>` : "";
+      // Render in source order, collapsing each run of bullets into one list,
+      // so a list stays attached to the sentence that introduces it.
+      let body = "";
+      let inList = false;
+      for (const item of group.items) {
+        if (item.kind === "bullet") {
+          if (!inList) {
+            body += "<ul>";
+            inList = true;
+          }
+          body += `<li>${esc(item.text)}</li>`;
+        } else {
+          if (inList) {
+            body += "</ul>";
+            inList = false;
+          }
+          body += `<p>${esc(item.text)}</p>`;
+        }
+      }
+      if (inList) body += "</ul>";
+      return heading + body;
+    })
+    .join("")}</div>`;
+}
+
+const banners = (list) =>
+  (list || [])
+    .map(
+      (w) =>
+        `<div class="banner ${w.level === "error" ? "error" : ""}">${esc(w.text)}</div>`
+    )
+    .join("");
+
+const pageHead = (title, note = "") =>
+  `<div class="page-head"><h2>${esc(title)}</h2>${
+    note ? `<span class="note">${esc(note)}</span>` : ""
+  }</div>`;
+
+/* --------------------------------------------------------------- brief */
+
+function renderBrief(d) {
+  const b = d.briefing || {};
+  const o = b.overview || {};
+  const alt = b.alternate_airfield || {};
+
+  const cards = [
+    stat("Flight", o.flight, o.role || "", "amber"),
+    stat("Package", o.package, o.package_type || ""),
+    stat("Time on Target", o.time_on_target, "", "green"),
+    stat("Target", o.target_icao || "—", o.target_area || ""),
+  ].join("");
+
+  const detail = [
+    card(
+      "Mission",
+      kv([
+        ["Task", o.mission],
+        ["Target area", o.target_area],
+        ["Sunrise", o.sunrise],
+        ["Sunset", o.sunset],
+      ]) || '<div class="empty">No detail.</div>'
+    ),
+    card(
+      "Recovery",
+      kv([
+        ["Departure", (b.airbases || {}).departure],
+        ["Recovery", (b.airbases || {}).recovery],
+        ["Alternate", alt.text || (b.airbases || {}).alternate],
+      ])
+    ),
+  ].join("");
+
+  const pkgRows = (b.package || []).map((e) => [
+    `${esc(e.callsign)}${e.primary ? ' <span class="tag amber">PRI</span>' : ""}`,
+    dim(e.flight_number),
+    esc(e.role),
+    esc(e.aircraft),
+    e.timing.map((t) => `${esc(t.label)} ${esc(t.value)}`).join("<br>") || "&mdash;",
+    `<span class="wrap">${esc(e.task)}</span>`,
+  ]);
+
+  const roster = b.roster || { headers: [], rows: [] };
+  const rosterRows = (roster.rows || []).map((r) => [
+    esc(r.callsign),
+    ...Array.from({ length: Math.max(roster.headers.length, r.pilots.length) }, (_, i) =>
+      r.pilots[i] && r.pilots[i] !== "Unassigned"
+        ? `<span class="tag green">${esc(r.pilots[i])}</span>`
+        : '<span class="dim">unassigned</span>'
+    ),
+  ]);
+
+  return (
+    pageHead("Mission Brief", b.generated ? `generated ${b.generated}` : "") +
+    banners(d.warnings) +
+    `<div class="grid c4">${cards}</div>` +
+    `<div class="grid c2" style="margin-top:12px">${detail}</div>` +
+    `<div class="grid" style="margin-top:12px">${card(
+      "Package Elements",
+      table(
+        ["Callsign", "Flt #", "Role", "Aircraft", "Timing", "Task"],
+        pkgRows,
+        { empty: "No package elements." }
+      )
+    )}</div>` +
+    `<div class="grid" style="margin-top:12px">${card(
+      "Pilot Roster",
+      table(["Callsign", ...(roster.headers || [])], rosterRows, {
+        empty: "No roster.",
+      })
+    )}</div>` +
+    `<div class="grid c2" style="margin-top:12px">${card(
+      "Situation",
+      prose(b.situation)
+    )}${card("Rules of Engagement", prose(b.roe))}</div>` +
+    `<div class="grid" style="margin-top:12px">${card(
+      "Emergency Procedures",
+      prose(b.emergency)
+    )}</div>`
+  );
+}
+
+/* ------------------------------------------------------------- loadout */
+
+function storeBlock(store, index, prefix) {
+  const facts = [];
+  if (store.range_nm) facts.push(`RNG <b>${store.range_nm} nm</b>`);
+  if (store.weight_lb) facts.push(`WT <b>${store.weight_lb} lb</b>`);
+  if (store.blast_radius) facts.push(`BLAST <b>${store.blast_radius} ft</b>`);
+
+  const tags = [];
+  if (store.category_label)
+    tags.push(`<span class="tag cyan">${esc(store.category_label)}</span>`);
+  if (store.laser) tags.push('<span class="tag amber">LASER CODE</span>');
+  if (!store.known) tags.push('<span class="tag red">NO REF DATA</span>');
+
+  const body = [];
+  if (store.guidance)
+    body.push(`<h5>Guidance</h5><div>${esc(store.guidance)}</div>`);
+  if (store.role) body.push(`<h5>Role</h5><div>${esc(store.role)}</div>`);
+  if (store.employment && store.employment.length)
+    body.push(
+      `<h5>Employment</h5><ul>${store.employment
+        .map((e) => `<li>${esc(e)}</li>`)
+        .join("")}</ul>`
+    );
+  if (store.fuzing) body.push(`<h5>Fuzing</h5><div>${esc(store.fuzing)}</div>`);
+  if (store.laser_note)
+    body.push(`<h5>Laser</h5><div>${esc(store.laser_note)}</div>`);
+  if (store.requires && store.requires.length)
+    body.push(
+      `<h5>Requires</h5><ul>${store.requires
+        .map((r) => `<li>${esc(r)}</li>`)
+        .join("")}</ul>`
+    );
+  if (!body.length)
+    body.push(
+      '<h5>Reference</h5><div class="dim">No curated employment data for this store. ' +
+        "Weight and range above come from the game files.</div>"
+    );
+
+  return `<div class="store" id="${prefix}-${index}">
+    <div class="store-head" data-store="${prefix}-${index}">
+      <span class="count">${store.count}&times;</span>
+      <span class="name">${esc(store.name)}</span>
+      ${tags.join(" ")}
+      <span class="store-facts">${facts.join("")}</span>
+      <span class="chev">&#9662;</span>
+    </div>
+    <div class="store-body">${body.join("")}</div>
+  </div>`;
+}
+
+function renderLoadout(d) {
+  const loadout = d.loadout || {};
+  const flights = loadout.flights || [];
+  if (!flights.length)
+    return pageHead("Loadout") + '<div class="empty">No ordnance in the briefing.</div>';
+
+  const player = flights.find((f) => f.is_player) || flights[0];
+  const others = flights.filter((f) => f !== player);
+  const lead = player.aircraft[0] || { stores: [], total_weight_lb: null };
+
+  const head = [
+    stat("Flight", player.callsign, `${player.aircraft.length} aircraft`, "amber"),
+    stat(
+      "Stores Weight",
+      lead.total_weight_lb ? `${lead.total_weight_lb} lb` : "—",
+      "per aircraft, game data"
+    ),
+    stat("Store Types", String(lead.stores.length), "distinct stores loaded"),
+    stat(
+      "Laser Code",
+      d.laser.needed ? d.laser.code || "not set" : "n/a",
+      d.laser.needed ? "required by loadout" : "no laser weapons",
+      d.laser.needed ? "amber" : ""
+    ),
+  ].join("");
+
+  const stores = lead.stores
+    .map((s, i) => storeBlock(s, i, "pl"))
+    .join("");
+
+  const notUniform = !player.uniform
+    ? '<div class="banner">Wingmen are not carrying the same loadout as the lead. ' +
+      "Per-aircraft detail is below.</div>"
+    : "";
+
+  const laserPanel = renderLaserPanel(d);
+
+  const otherBlocks = others.length
+    ? card(
+        "Package Mates",
+        others
+          .map((f) => {
+            const ac = f.aircraft[0] || { stores: [] };
+            return `<div style="margin-bottom:10px"><div style="font-family:var(--mono);color:var(--cyan);margin-bottom:5px">${esc(
+              f.callsign
+            )} <span class="dim">&mdash; ${f.aircraft.length} aircraft</span></div>${table(
+              ["Qty", "Store", "Weight", "Range"],
+              ac.stores.map((s) => [
+                `${s.count}&times;`,
+                esc(s.name),
+                s.weight_lb ? `${s.weight_lb} lb` : '<span class="dim">&mdash;</span>',
+                s.range_nm ? `${s.range_nm} nm` : '<span class="dim">&mdash;</span>',
+              ])
+            )}</div>`;
+          })
+          .join("")
+      )
+    : "";
+
+  const perAircraft = !player.uniform
+    ? card(
+        "Per-Aircraft Detail",
+        player.aircraft
+          .map(
+            (ac) =>
+              `<div style="margin-bottom:10px"><div style="font-family:var(--mono);color:var(--cyan);margin-bottom:5px">${esc(
+                ac.label
+              )}</div>${table(
+                ["Qty", "Store"],
+                ac.stores.map((s) => [`${s.count}&times;`, esc(s.name)])
+              )}</div>`
+          )
+          .join("")
+      )
+    : "";
+
+  return (
+    pageHead("Loadout", `${player.callsign} — click a store for employment detail`) +
+    notUniform +
+    `<div class="grid c4">${head}</div>` +
+    `<div style="margin-top:12px">${stores}</div>` +
+    laserPanel +
+    (perAircraft ? `<div class="grid" style="margin-top:12px">${perAircraft}</div>` : "") +
+    (otherBlocks ? `<div class="grid" style="margin-top:12px">${otherBlocks}</div>` : "") +
+    `<div class="grid" style="margin-top:12px">${card(
+      "Where this comes from",
+      '<div class="hint">Stores are read from the Ordnance section of briefing.txt. ' +
+        "Weights and missile ranges come from Falcon4_WCD.xml in your BMS install. " +
+        "Range is only shown for missiles &mdash; BMS stores a placeholder value for " +
+        "bombs that would be misleading as a release range. Employment guidance, " +
+        "fuzing and laser applicability are curated reference notes, not game data. " +
+        "External tank weights are dry weights, not fuel loads.</div>"
+    )}</div>`
+  );
+}
+
+function renderLaserPanel(d) {
+  const laser = d.laser || {};
+  const ref = laser.reference || {};
+  const needed = laser.needed;
+
+  const stores = laser.player_laser_stores || [];
+  const applies = stores.length
+    ? `<div class="hint" style="margin-top:8px">Applies to: ${stores
+        .map((s) => `<span class="tag amber">${esc(s)}</span>`)
+        .join(" ")}</div>`
+    : "";
+
+  const rules = (ref.rules || []).map((r) => `<li>${esc(r)}</li>`).join("");
+
+  return `<div class="grid c2" style="margin-top:12px">
+    ${card(
+      needed ? "Laser Code — required by this loadout" : "Laser Code",
+      `<div class="laser-row">
+        <input class="laser-input" id="laser-code" value="${esc(laser.code || "")}"
+               maxlength="4" inputmode="numeric" aria-label="Laser code">
+        <div>
+          <div class="hint">Valid ${esc(ref.valid_range || "1111 - 1788")}. Default ${esc(
+        ref.default || "1688"
+      )}.</div>
+          <div class="save-state" id="laser-save"></div>
+        </div>
+      </div>
+      <div class="laser-row" style="margin-top:10px">
+        <label class="hint" for="wing-code">Buddy / wingman code</label>
+        <input class="laser-input" id="wing-code" style="font-size:19px;width:92px"
+               value="${esc(laser.wingman_code || "")}" maxlength="4" inputmode="numeric">
+      </div>
+      ${applies}
+      <div class="hint" style="margin-top:10px">${esc(laser.source_note || "")}</div>`
+    )}
+    ${card("Laser Code Rules", `<ul class="prose" style="padding-left:17px">${rules}</ul>`)}
+  </div>`;
+}
+
+/* --------------------------------------------------------------- steer */
+
+function renderSteer(d) {
+  const points = (d.briefing || {}).steerpoints || [];
+  const rows = points.map((p) => [
+    `<span style="color:var(--amber)">${esc(p.index)}</span>`,
+    dim(p.description),
+    dim(p.time),
+    dim(p.distance),
+    dim(p.heading),
+    dim(p.cas),
+    dim(p.altitude),
+    dim(p.action),
+    dim(p.formation),
+    `<span class="wrap">${val(p.comments) ? esc(p.comments) : ""}</span>`,
+  ]);
+  return (
+    pageHead("Steerpoints", `${points.length} points`) +
+    card(
+      "",
+      table(
+        ["#", "Desc", "Time", "Dist", "Hdg", "CAS", "Alt", "Action", "Form", "Comments"],
+        rows,
+        { empty: "No steerpoints in the briefing." }
+      )
+    )
+  );
+}
+
+/* --------------------------------------------------------------- comms */
+
+function renderComms(d) {
+  const b = d.briefing || {};
+  const comms = b.comms || { rows: [] };
+  const dtc = d.dtc || { uhf: [], vhf: [] };
+
+  const ladderRows = comms.rows.map((r) => [
+    esc(r.agency),
+    val(r.callsign) && r.callsign !== "None"
+      ? `<span style="color:var(--cyan)">${esc(r.callsign)}</span>`
+      : '<span class="dim">&mdash;</span>',
+    dim(r.uhf),
+    dim(r.vhf),
+    `<span class="wrap dim">${esc(r.notes)}</span>`,
+  ]);
+
+  const presetTable = (list, band) =>
+    table(
+      ["#", "Freq", "Assignment"],
+      list.map((p) => [
+        `<span style="color:var(--amber)">${p.preset}</span>`,
+        esc(p.frequency),
+        p.open ? '<span class="dim">open</span>' : esc(p.comment),
+      ]),
+      { empty: `No ${band} presets found.` }
+    );
+
+  const iffBlocks = ((b.iff || {}).blocks || [])
+    .map((block) => {
+      const rows = block.rows.map(
+        (r) =>
+          `<tr><th style="border:0;padding:3px 9px 3px 0">${esc(
+            r.label
+          )}</th>${r.values
+            .map((v) => `<td style="border:0;padding:3px 9px 3px 0">${esc(v)}</td>`)
+            .join("")}</tr>`
+      );
+      return `<h5 style="margin:10px 0 4px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--amber)">${esc(
+        block.heading || "General"
+      )}</h5><div class="scroll-x"><table style="width:auto">${rows.join("")}</table></div>`;
+    })
+    .join("");
+
+  const link16 = (b.link16 || [])
+    .map((file) => {
+      const meta = file.meta.length
+        ? kv(file.meta.map((m) => [m.label, m.value]))
+        : "";
+      const stnRows = file.stns.map((s) => [
+        `<span style="color:var(--cyan)">${esc(s.label)}</span>`,
+        ...s.values.map((v) => (v === "----" ? '<span class="dim">&mdash;</span>' : esc(v))),
+        s.channels.map((c) => `${esc(c.label)} ${esc(c.value)}`).join("<br>"),
+      ]);
+      return `<div style="margin-bottom:12px"><div style="font-family:var(--mono);color:var(--amber);margin-bottom:6px">${esc(
+        file.name
+      )}</div>${meta}${table(
+        ["", ...(file.headers.length ? file.headers.slice(0, 8) : ["#1", "#2", "#3", "#4", "#5", "#6", "#7", "#8"]), "Channels"],
+        stnRows
+      )}</div>`;
+    })
+    .join("");
+
+  const dtcNote = dtc.generated
+    ? `dtc_comm.txt generated ${dtc.generated}`
+    : "dtc_comm.txt not found";
+
+  return (
+    pageHead("Communications") +
+    banners((d.warnings || []).filter((w) => /preset/i.test(w.text))) +
+    `<div class="grid">${card("Comm Ladder", table(
+      ["Agency", "Callsign", "UHF", "VHF", "Notes"],
+      ladderRows,
+      { empty: "No comm ladder in the briefing." }
+    ))}</div>` +
+    `<div class="grid c2" style="margin-top:12px">
+      ${card(`UHF Presets`, presetTable(dtc.uhf, "UHF"))}
+      ${card(`VHF Presets`, presetTable(dtc.vhf, "VHF"))}
+    </div>
+    <div class="hint" style="margin-top:6px">${esc(dtcNote)}</div>` +
+    `<div class="grid c2" style="margin-top:12px">
+      ${card("IFF", iffBlocks || '<div class="empty">No IFF data.</div>')}
+      ${card("Link 16", link16 || '<div class="empty">No Link 16 data.</div>')}
+    </div>` +
+    `<div class="grid" style="margin-top:12px">${card(
+      "Note on IFF rotation",
+      '<div class="hint">The rotation rows are shown exactly as BMS writes them. ' +
+        "BMS does not always emit the same number of values in each row, so the rows " +
+        "are deliberately not zipped into aligned columns &mdash; doing so risks " +
+        "pairing a code with the wrong time block. Read across each row as printed.</div>"
+    )}</div>`
+  );
+}
+
+/* ------------------------------------------------------------- threats */
+
+function renderThreats(d) {
+  const b = d.briefing || {};
+  const support = b.support || [];
+  const rows = support.map((s) => [
+    `<span style="color:var(--cyan)">${esc(s.callsign)}</span>`,
+    s.kind ? `<span class="tag violet">${esc(s.kind)}</span>` : "",
+    esc(s.asset),
+    s.tacan ? `<span class="tag green">TCN ${esc(s.tacan)}</span>` : '<span class="dim">&mdash;</span>',
+    `<span class="wrap dim">${esc(s.detail)}</span>`,
+  ]);
+
+  return (
+    pageHead("Threats & Support") +
+    `<div class="grid">${card("Threat Analysis", prose(b.threats))}</div>` +
+    `<div class="grid" style="margin-top:12px">${card(
+      "Support Assets",
+      table(["Callsign", "Type", "Asset", "TACAN", "Station"], rows, {
+        empty: "No support assets.",
+      })
+    )}</div>`
+  );
+}
+
+/* ------------------------------------------------------------- weather */
+
+function renderWeather(d) {
+  const wx = (d.briefing || {}).weather || { headers: [], rows: [] };
+  const rows = (wx.rows || []).map((r) => [
+    `<span class="dim">${esc(r.label)}</span>`,
+    ...r.values.map((v) => esc(v)),
+  ]);
+  const pick = (label) => {
+    const row = (wx.rows || []).find((r) => r.label.toLowerCase().startsWith(label));
+    return row ? row.values[0] : "";
+  };
+  return (
+    pageHead("Weather") +
+    `<div class="grid c4">
+      ${stat("Conditions", pick("situation"), "at takeoff")}
+      ${stat("Wind", pick("wind"), "at takeoff")}
+      ${stat("Visibility", pick("visibility"), "at takeoff", "green")}
+      ${stat("Cloud Base", pick("cloud"), "at takeoff")}
+    </div>` +
+    `<div class="grid" style="margin-top:12px">${card(
+      "Full Forecast",
+      table(["", ...(wx.headers || [])], rows, { empty: "No weather in the briefing." })
+    )}</div>`
+  );
+}
+
+/* -------------------------------------------------------------- charts */
+
+function renderCharts(d) {
+  const resolved = (d.charts || {}).resolved || [];
+  const airfields = (d.charts || {}).airfields || [];
+  const summary = (d.charts || {}).summary || {};
+
+  const found = resolved.filter((r) => r.found);
+  const options = airfields
+    .map(
+      (a) =>
+        `<option value="${esc(a.folder)}">${esc(a.name)}${
+          a.icao ? ` (${esc(a.icao)})` : ""
+        } — ${esc(a.country)}</option>`
+    )
+    .join("");
+
+  const roleButtons = found
+    .map(
+      (r) =>
+        `<button class="link-btn" data-airfield="${esc(
+          r.airfield.folder
+        )}">${esc(r.label)}: ${esc(r.airfield.name)}${
+          r.airfield.icao ? ` (${esc(r.airfield.icao)})` : ""
+        }</button>`
+    )
+    .join("");
+
+  const missing = resolved
+    .filter((r) => !r.found)
+    .map(
+      (r) =>
+        `<div class="banner">No charts found for ${esc(
+          r.label.toLowerCase()
+        )} field &ldquo;${esc(r.requested)}&rdquo;.</div>`
+    )
+    .join("");
+
+  const current =
+    viewerChoice.airfield ||
+    (found.length ? found[0].airfield.folder : airfields.length ? airfields[0].folder : "");
+
+  return (
+    pageHead(
+      "Charts",
+      `${summary.chart_count || 0} charts, ${summary.airfield_count || 0} airfields`
+    ) +
+    missing +
+    `<div class="row-flow">
+      ${roleButtons}
+      <select class="picker" id="airfield-picker">${options}</select>
+    </div>
+    <div id="chart-area" data-airfield="${esc(current)}"></div>`
+  );
+}
+
+function renderChartArea() {
+  const host = document.getElementById("chart-area");
+  if (!host) return;
+  const folder = host.dataset.airfield;
+  const airfield = ((DATA.charts || {}).airfields || []).find((a) => a.folder === folder);
+  if (!airfield) {
+    host.innerHTML = '<div class="empty">Select an airfield.</div>';
+    return;
+  }
+
+  const key = `chart:${folder}`;
+  let chosen = viewerChoice[key];
+  if (!chosen || !airfield.charts.some((c) => c.rel === chosen))
+    chosen = airfield.charts.length ? airfield.charts[0].rel : "";
+
+  const buttons = airfield.charts
+    .map(
+      (c) =>
+        `<button data-chart="${esc(c.rel)}" class="${c.rel === chosen ? "active" : ""}">${esc(
+          c.kind
+        )}${c.title ? ` · ${esc(c.title)}` : ""}</button>`
+    )
+    .join("");
+
+  host.innerHTML =
+    `<div class="chart-list">${buttons}</div>` +
+    viewerFor(`/chart/${encodeURI(chosen)}`, chosen);
+
+  host.querySelectorAll("[data-chart]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      viewerChoice[key] = btn.dataset.chart;
+      renderChartArea();
+    })
+  );
+  wirePanZoom(host);
+}
+
+/* ---------------------------------------------------------------- maps */
+
+function renderMaps(d) {
+  const maps = (d.charts || {}).maps || [];
+  if (!maps.length)
+    return pageHead("Maps") + '<div class="empty">No maps found in the BMS Docs folder.</div>';
+
+  let chosen = viewerChoice.map;
+  if (!chosen || !maps.some((m) => m.rel === chosen)) chosen = maps[0].rel;
+
+  const buttons = maps
+    .map(
+      (m) =>
+        `<button data-map="${esc(m.rel)}" class="${m.rel === chosen ? "active" : ""}">${esc(
+          m.title
+        )} <span class="dim">${m.size_mb} MB</span></button>`
+    )
+    .join("");
+
+  return (
+    pageHead("Theater Maps", "drag to pan, scroll to zoom") +
+    `<div class="chart-list">${buttons}</div>` +
+    viewerFor(`/map/${encodeURI(chosen)}`, chosen)
+  );
+}
+
+/* -------------------------------------------------------------- viewer */
+
+function viewerFor(url, rel) {
+  if (!rel) return '<div class="empty">Nothing to display.</div>';
+  if (rel.toLowerCase().endsWith(".pdf")) {
+    return `<div class="viewer"><iframe src="${esc(url)}#view=FitH" title="chart"></iframe></div>`;
+  }
+  return `<div class="viewer">
+    <div class="pan" data-pan>
+      <img src="${esc(url)}" alt="chart" draggable="false">
+    </div>
+    <div class="viewer-bar">
+      <button data-zoom="in">+</button>
+      <button data-zoom="out">&minus;</button>
+      <button data-zoom="fit">FIT</button>
+      <button data-zoom="1">1:1</button>
+    </div>
+  </div>`;
+}
+
+/** Drag-to-pan and scroll-to-zoom for the chart and map images. */
+function wirePanZoom(root = document) {
+  root.querySelectorAll("[data-pan]").forEach((pan) => {
+    if (pan.dataset.wired) return;
+    pan.dataset.wired = "1";
+
+    const img = pan.querySelector("img");
+    const view = { scale: 1, x: 0, y: 0 };
+
+    const apply = () => {
+      img.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+    };
+
+    const fit = () => {
+      if (!img.naturalWidth) return;
+      const sx = pan.clientWidth / img.naturalWidth;
+      const sy = pan.clientHeight / img.naturalHeight;
+      view.scale = Math.min(sx, sy);
+      view.x = (pan.clientWidth - img.naturalWidth * view.scale) / 2;
+      view.y = (pan.clientHeight - img.naturalHeight * view.scale) / 2;
+      apply();
+    };
+
+    if (img.complete && img.naturalWidth) fit();
+    else img.addEventListener("load", fit, { once: true });
+
+    let dragging = false;
+    let startX = 0;
+    let startY = 0;
+
+    pan.addEventListener("mousedown", (e) => {
+      dragging = true;
+      startX = e.clientX - view.x;
+      startY = e.clientY - view.y;
+      pan.classList.add("dragging");
+      e.preventDefault();
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!dragging) return;
+      view.x = e.clientX - startX;
+      view.y = e.clientY - startY;
+      apply();
+    });
+    window.addEventListener("mouseup", () => {
+      dragging = false;
+      pan.classList.remove("dragging");
+    });
+
+    pan.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        const rect = pan.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+        const next = Math.min(8, Math.max(0.05, view.scale * factor));
+        // Keep the point under the cursor fixed while zooming.
+        view.x = cx - ((cx - view.x) * next) / view.scale;
+        view.y = cy - ((cy - view.y) * next) / view.scale;
+        view.scale = next;
+        apply();
+      },
+      { passive: false }
+    );
+
+    const bar = pan.parentElement.querySelector(".viewer-bar");
+    if (bar) {
+      bar.addEventListener("click", (e) => {
+        const mode = e.target.dataset.zoom;
+        if (!mode) return;
+        if (mode === "fit") return fit();
+        if (mode === "1") {
+          view.scale = 1;
+          view.x = 0;
+          view.y = 0;
+          return apply();
+        }
+        const factor = mode === "in" ? 1.25 : 1 / 1.25;
+        view.scale = Math.min(8, Math.max(0.05, view.scale * factor));
+        apply();
+      });
+    }
+  });
+}
+
+/* ---------------------------------------------------------------- shell */
+
+const RENDERERS = {
+  brief: renderBrief,
+  loadout: renderLoadout,
+  steer: renderSteer,
+  comms: renderComms,
+  threats: renderThreats,
+  wx: renderWeather,
+  charts: renderCharts,
+  maps: renderMaps,
+};
+
+function renderNav() {
+  document.getElementById("nav").innerHTML = TABS.map(
+    (t, i) =>
+      `<button data-tab="${t.id}" class="${t.id === activeTab ? "active" : ""}">${esc(
+        t.label
+      )}<span class="key">${i + 1}</span></button>`
+  ).join("");
+  document.querySelectorAll("#nav button").forEach((btn) =>
+    btn.addEventListener("click", () => setTab(btn.dataset.tab))
+  );
+}
+
+function setTab(id) {
+  if (!RENDERERS[id]) return;
+  activeTab = id;
+  localStorage.setItem("kb.tab", id);
+  renderNav();
+  renderMain();
+}
+
+function renderMain() {
+  const main = document.getElementById("main");
+
+  if (!DATA) {
+    main.innerHTML = '<div class="empty">Loading&hellip;</div>';
+    return;
+  }
+  if (!DATA.ok) {
+    main.innerHTML = pageHead("Setup Required") + banners(DATA.warnings);
+    return;
+  }
+
+  main.innerHTML = RENDERERS[activeTab](DATA);
+  main.scrollTop = 0;
+
+  // Expandable store rows.
+  main.querySelectorAll("[data-store]").forEach((head) =>
+    head.addEventListener("click", () =>
+      document.getElementById(head.dataset.store).classList.toggle("open")
+    )
+  );
+
+  // Laser code fields.
+  const wire = (id, field) => {
+    const input = document.getElementById(id);
+    if (input) input.addEventListener("change", () => saveLaser(field, input));
+  };
+  wire("laser-code", "laser_code");
+  wire("wing-code", "wingman_laser_code");
+
+  if (activeTab === "charts") {
+    const picker = document.getElementById("airfield-picker");
+    const area = document.getElementById("chart-area");
+    if (picker && area) {
+      picker.value = area.dataset.airfield;
+      picker.addEventListener("change", () => {
+        viewerChoice.airfield = picker.value;
+        area.dataset.airfield = picker.value;
+        renderChartArea();
+      });
+    }
+    main.querySelectorAll("[data-airfield]").forEach((btn) => {
+      if (btn.tagName !== "BUTTON") return;
+      btn.addEventListener("click", () => {
+        viewerChoice.airfield = btn.dataset.airfield;
+        area.dataset.airfield = btn.dataset.airfield;
+        if (picker) picker.value = btn.dataset.airfield;
+        renderChartArea();
+      });
+    });
+    renderChartArea();
+  }
+
+  if (activeTab === "maps") {
+    main.querySelectorAll("[data-map]").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        viewerChoice.map = btn.dataset.map;
+        renderMain();
+      })
+    );
+    wirePanZoom(main);
+  }
+}
+
+async function saveLaser(field, input) {
+  const note = document.getElementById("laser-save");
+  try {
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: input.value.trim() }),
+    });
+    const body = await res.json();
+    if (!res.ok || !body.ok) {
+      input.classList.add("bad");
+      if (note) {
+        note.textContent = body.error || "Could not save.";
+        note.className = "save-state bad";
+      }
+      return;
+    }
+    input.classList.remove("bad");
+    if (note) {
+      note.textContent = "Saved";
+      note.className = "save-state ok";
+      setTimeout(() => (note.textContent = ""), 2000);
+    }
+    if (DATA && DATA.laser) DATA.laser.code = body.settings.laser_code;
+  } catch (err) {
+    if (note) {
+      note.textContent = "Could not reach the kneeboard server.";
+      note.className = "save-state bad";
+    }
+  }
+}
+
+function renderStatus() {
+  const sub = document.getElementById("brand-sub");
+  const fresh = document.getElementById("freshness");
+  const gen = document.getElementById("generated");
+
+  if (!DATA || !DATA.ok) {
+    sub.textContent = "not connected";
+    fresh.innerHTML = '<span class="stale">setup required</span>';
+    return;
+  }
+  const install = DATA.install || {};
+  sub.textContent = `BMS ${install.version || "?"}`;
+  fresh.innerHTML = '<span class="live">&#9679; live</span>';
+  const b = DATA.briefing || {};
+  gen.textContent = b.generated ? `brief ${b.generated}` : "no briefing yet";
+}
+
+async function load(force = false) {
+  const res = await fetch(`/api/state${force ? "?force=1" : ""}`);
+  DATA = await res.json();
+  lastToken = DATA.token;
+  renderStatus();
+  renderMain();
+}
+
+/** Poll for BMS rewriting the briefing, and pull a fresh board when it does. */
+async function pollFreshness() {
+  try {
+    const res = await fetch("/api/token");
+    const body = await res.json();
+    if (lastToken !== null && body.token !== lastToken) await load();
+  } catch (err) {
+    const fresh = document.getElementById("freshness");
+    if (fresh) fresh.innerHTML = '<span class="stale">&#9679; offline</span>';
+  }
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  const index = parseInt(e.key, 10);
+  if (index >= 1 && index <= TABS.length) setTab(TABS[index - 1].id);
+  if (e.key === "r" || e.key === "R") load(true);
+});
+
+renderNav();
+load().catch(() => {
+  document.getElementById("main").innerHTML =
+    '<div class="empty">Could not reach the kneeboard server.</div>';
+});
+setInterval(pollFreshness, 2000);
