@@ -141,6 +141,11 @@ def main() -> int:
     if update_info.get("updated"):
         print("  restart: relaunching on the updated version...\n")
         os.environ[REEXEC_GUARD] = "1"
+        # execv replaces this process, discarding anything still sitting in the
+        # stdout buffer. Without this flush the summary of what was updated is
+        # lost whenever output is redirected to a file rather than a console.
+        sys.stdout.flush()
+        sys.stderr.flush()
         try:
             os.execv(sys.executable, [sys.executable, *sys.argv])
         except OSError as exc:
