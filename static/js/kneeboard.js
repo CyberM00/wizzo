@@ -22,6 +22,28 @@ let activeTab = localStorage.getItem("kb.tab") || "brief";
 let lastToken = null;
 const viewerChoice = {};
 
+/* ------------------------------------------------------------- theme */
+
+const themeNow = () =>
+  document.documentElement.dataset.theme === "day" ? "day" : "night";
+
+function applyTheme(name) {
+  const theme = name === "day" ? "day" : "night";
+  document.documentElement.dataset.theme = theme;
+  try {
+    localStorage.setItem("kb.theme", theme);
+  } catch (e) {}
+  const btn = document.getElementById("theme-btn");
+  // The button offers the theme you would switch *to*.
+  if (btn) {
+    btn.textContent = theme === "day" ? "Night" : "Day";
+    btn.classList.toggle("on", theme === "day");
+  }
+  // A redraw keeps the viewer overlay colours consistent when the theme
+  // changes while a chart or map is open.
+  if (DATA && (activeTab === "charts" || activeTab === "maps")) renderMain();
+}
+
 /* ------------------------------------------------------------- helpers */
 
 const esc = (value) =>
@@ -962,8 +984,14 @@ document.addEventListener("keydown", (e) => {
   const index = parseInt(e.key, 10);
   if (index >= 1 && index <= TABS.length) setTab(TABS[index - 1].id);
   if (e.key === "r" || e.key === "R") load(true);
+  if (e.key === "t" || e.key === "T") applyTheme(themeNow() === "day" ? "night" : "day");
 });
 
+document
+  .getElementById("theme-btn")
+  .addEventListener("click", () => applyTheme(themeNow() === "day" ? "night" : "day"));
+
+applyTheme(themeNow());
 renderNav();
 load().catch(() => {
   document.getElementById("main").innerHTML =

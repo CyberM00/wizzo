@@ -1,4 +1,11 @@
-/* Falcon BMS kneeboard -- tuned for a second monitor read at arm's length. */
+/* Falcon BMS kneeboard -- tuned for a second monitor read at arm's length.
+ *
+ * Two themes. "night" is the default dark cockpit scheme; "day" is a light
+ * scheme for a lit room and for reading approach plates -- those are white
+ * PDFs, so on the dark theme every chart is a bright rectangle in a dark frame.
+ *
+ * Every colour lives in a variable, including the overlay and banner washes, so
+ * a theme is a complete palette swap with nothing hardcoded left behind. */
 
 :root {
   --bg: #080b11;
@@ -14,8 +21,34 @@
   --red: #ff6b6b;
   --cyan: #4cc9f0;
   --violet: #b39ddb;
+  --viewer-bg: #000;
+  --overlay-bg: rgba(8, 11, 17, 0.92);
+  --wash-warn: rgba(255, 179, 64, 0.09);
+  --wash-error: rgba(255, 107, 107, 0.1);
+  --wash-info: rgba(76, 201, 240, 0.08);
   --mono: "Cascadia Mono", "Consolas", "SFMono-Regular", ui-monospace, monospace;
   --sans: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+:root[data-theme="day"] {
+  --bg: #f2efe8;
+  --panel: #ffffff;
+  --panel-2: #e9e4d8;
+  --border: #d6d0c4;
+  --border-bright: #ada492;
+  --text: #1b1a17;
+  --text-dim: #575145;
+  --text-faint: #837b6a;
+  --amber: #9c3d0c;
+  --green: #1c6135;
+  --red: #9e1c1c;
+  --cyan: #124a63;
+  --violet: #533a86;
+  --viewer-bg: #e4e0d6;
+  --overlay-bg: rgba(255, 255, 255, 0.94);
+  --wash-warn: rgba(156, 61, 12, 0.1);
+  --wash-error: rgba(158, 28, 28, 0.09);
+  --wash-info: rgba(18, 74, 99, 0.08);
 }
 
 * { box-sizing: border-box; }
@@ -224,14 +257,14 @@ td.wrap { font-family: var(--sans); white-space: normal; }
   padding: 8px 12px;
   border-radius: 4px;
   border-left: 3px solid var(--amber);
-  background: rgba(255, 179, 64, 0.09);
+  background: var(--wash-warn);
   color: var(--text);
   font-size: 13px;
   margin-bottom: 8px;
   line-height: 1.5;
 }
-.banner.error { border-left-color: var(--red); background: rgba(255, 107, 107, 0.1); }
-.banner.info { border-left-color: var(--cyan); background: rgba(76, 201, 240, 0.08); }
+.banner.error { border-left-color: var(--red); background: var(--wash-error); }
+.banner.info { border-left-color: var(--cyan); background: var(--wash-info); }
 
 .prose h4 {
   margin: 12px 0 5px;
@@ -343,7 +376,7 @@ td.wrap { font-family: var(--sans); white-space: normal; }
 .viewer {
   border: 1px solid var(--border);
   border-radius: 5px;
-  background: #000;
+  background: var(--viewer-bg);
   height: calc(100vh - 210px);
   min-height: 340px;
   overflow: hidden;
@@ -373,7 +406,7 @@ td.wrap { font-family: var(--sans); white-space: normal; }
   bottom: 10px;
   display: flex;
   gap: 5px;
-  background: rgba(8, 11, 17, 0.92);
+  background: var(--overlay-bg);
   border: 1px solid var(--border-bright);
   border-radius: 4px;
   padding: 4px;
@@ -426,3 +459,28 @@ select.picker {
   font-family: var(--sans);
 }
 .link-btn:hover { color: var(--amber); border-color: var(--amber); }
+
+/* ------------------------------------------------- sidebar controls */
+
+.side-controls {
+  display: flex;
+  gap: 5px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+}
+.side-controls button {
+  flex: 1;
+  min-height: 30px;
+  padding: 4px 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-dim);
+  font-family: var(--sans);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.side-controls button:hover { color: var(--text); border-color: var(--border-bright); }
+.side-controls button.on { color: var(--amber); border-color: var(--amber); }

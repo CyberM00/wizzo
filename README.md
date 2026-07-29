@@ -72,7 +72,20 @@ If an update changes `requirements.txt`, the console says so and you should run
 | **Charts** | Approach plates auto-selected for your departure, recovery, alternate and target fields; all 89 KTO airfields browsable |
 | **Maps** | Theatre maps with drag-to-pan and scroll-to-zoom |
 
-Keys `1`–`8` switch pages. `R` forces a reload.
+Keys `1`–`8` switch pages. `R` forces a reload. `T` switches theme.
+
+## Themes
+
+Two palettes, toggled with the button under the nav or the `T` key:
+
+- **Amber night** — the default dark cockpit scheme.
+- **Paper day** — a light scheme for a lit room. Worth switching to when you are
+  reading charts: the approach plates are white PDFs, so on the dark theme every
+  chart is a bright rectangle in a dark frame.
+
+The choice is stored per device in the browser, so a second monitor in a dark
+room and a tablet in a lit one can each keep their own. It is applied before the
+stylesheet paints, so a night-theme board never flashes white on load.
 
 ## How it updates
 

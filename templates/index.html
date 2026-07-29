@@ -3,7 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
   <title>BMS Kneeboard</title>
+  <script>
+    // Applied before the stylesheet paints, otherwise a night-theme board
+    // flashes white on every load on a phone.
+    try {
+      var t = localStorage.getItem("kb.theme");
+      if (t === "day" || t === "night") document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/kneeboard.css') }}">
 </head>
 <body>
@@ -14,6 +23,9 @@
         <div class="sub" id="brand-sub">starting&hellip;</div>
       </div>
       <nav id="nav"></nav>
+      <div class="side-controls">
+        <button id="theme-btn" type="button" title="Switch between the night and day palette (T)">Day</button>
+      </div>
       <div class="sidebar-foot">
         <div id="freshness">&mdash;</div>
         <div id="generated"></div>
