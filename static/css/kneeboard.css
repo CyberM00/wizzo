@@ -484,3 +484,101 @@ select.picker {
 }
 .side-controls button:hover { color: var(--text); border-color: var(--border-bright); }
 .side-controls button.on { color: var(--amber); border-color: var(--amber); }
+
+/* ------------------------------------------------ portrait / vertical
+ *
+ * Aimed at a rotated monitor (1080x1920). The left rail is moved to the top
+ * so the full 1080 goes to content, and the viewer is given most of the
+ * remaining height -- approach plates are portrait, so a tall screen suits
+ * them better than a wide one ever did. */
+
+@media (orientation: portrait) {
+  #app { flex-direction: column; }
+
+  #sidebar {
+    width: 100%;
+    flex: 0 0 auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "brand foot controls"
+      "nav   nav  nav";
+    align-items: center;
+  }
+
+  .brand { grid-area: brand; border-bottom: 0; padding: 10px 14px; }
+  .sidebar-foot {
+    grid-area: foot;
+    border-top: 0;
+    text-align: right;
+    padding: 0 14px;
+  }
+  .side-controls {
+    grid-area: controls;
+    border-top: 0;
+    padding: 0 12px 0 0;
+  }
+  .side-controls button { min-width: 74px; }
+
+  nav {
+    grid-area: nav;
+    display: flex;
+    overflow-x: auto;
+    padding: 0;
+    border-top: 1px solid var(--border);
+    scrollbar-width: none;
+  }
+  nav::-webkit-scrollbar { display: none; }
+  nav button {
+    width: auto;
+    flex: 1 0 auto;
+    justify-content: center;
+    min-height: 42px;
+    border-left: 0;
+    border-bottom: 3px solid transparent;
+    white-space: nowrap;
+  }
+  nav button.active { border-left: 0; border-bottom-color: var(--amber); }
+  nav button .key { margin-left: 7px; }
+
+  /* Two columns reads better than four on a 1080-wide column. */
+  .grid.c4, .grid.c3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* Hand the tall screen to the charts and maps. */
+  .viewer { height: calc(100vh - 250px); }
+}
+
+/* --------------------------------------------------------- phone-sized */
+
+@media (max-width: 760px) {
+  html, body { overflow: auto; }
+
+  #sidebar {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "brand controls"
+      "foot  foot"
+      "nav   nav";
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand .sub { margin-top: 0; }
+  .sidebar-foot { text-align: left; padding: 0 14px 6px; }
+
+  nav button { flex: 0 0 auto; min-height: 44px; padding: 11px 15px; }
+  nav button .key { display: none; }
+
+  #main { padding: 12px 12px 32px; overflow: visible; }
+  .grid.c2, .grid.c3, .grid.c4 { grid-template-columns: minmax(0, 1fr); }
+
+  /* Fingers, not a mouse. */
+  .store-head { padding: 12px 11px; }
+  .store-facts { display: none; }
+  .chart-list button { min-height: 40px; font-size: 13px; }
+  select.picker { min-height: 40px; width: 100%; max-width: none; }
+  .viewer { height: 62vh; }
+}

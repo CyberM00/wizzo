@@ -74,6 +74,10 @@ If an update changes `requirements.txt`, the console says so and you should run
 
 Keys `1`–`8` switch pages. `R` forces a reload. `T` switches theme.
 
+On a portrait screen the nav moves to the top so the full width goes to content,
+the stat grids drop to two columns, and the chart viewer takes most of the
+remaining height — approach plates are portrait, so a tall screen suits them.
+
 ## Themes
 
 Two palettes, toggled with the button under the nav or the `T` key:
