@@ -501,12 +501,16 @@ select.picker {
     border-right: 0;
     border-bottom: 1px solid var(--border);
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    /* minmax(0, ...) so a wide control row cannot push the grid past the
+       viewport and drag the nav and footer out with it. */
+    grid-template-columns: auto minmax(0, 1fr) auto;
     grid-template-areas:
       "brand foot controls"
       "nav   nav  nav";
     align-items: center;
   }
+
+  nav, .sidebar-foot { min-width: 0; }
 
   .brand { grid-area: brand; border-bottom: 0; padding: 10px 14px; }
   .sidebar-foot {
@@ -556,7 +560,7 @@ select.picker {
   html, body { overflow: auto; }
 
   #sidebar {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "brand controls"
       "foot  foot"
@@ -565,6 +569,8 @@ select.picker {
     top: 0;
     z-index: 20;
   }
+  /* Phone widths cannot afford the portrait rail's button sizing. */
+  .side-controls button { min-width: 0; padding: 4px 8px; }
   .brand { display: flex; align-items: baseline; gap: 10px; }
   .brand .sub { margin-top: 0; }
   .sidebar-foot { text-align: left; padding: 0 14px 6px; }

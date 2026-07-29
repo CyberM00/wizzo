@@ -131,17 +131,49 @@ const pageHead = (title, note = "") =>
 
 /* --------------------------------------------------------------- brief */
 
+const isDcs = (d) => (d || DATA || {}).sim === "dcs";
+
 function renderBrief(d) {
   const b = d.briefing || {};
   const o = b.overview || {};
   const alt = b.alternate_airfield || {};
 
-  const cards = [
-    stat("Flight", o.flight, o.role || "", "amber"),
-    stat("Package", o.package, o.package_type || ""),
-    stat("Time on Target", o.time_on_target, "", "green"),
-    stat("Target", o.target_icao || "—", o.target_area || ""),
-  ].join("");
+  // DCS carries no package construct, but does carry the airframe, theatre and
+  // mission date, which are worth the same real estate.
+  const cards = (
+    isDcs(d)
+      ? [
+          stat("Flight", o.flight, o.aircraft_type || "", "amber"),
+          stat("Task", o.role, o.theatre || ""),
+          stat("Time on Target", o.time_on_target, "", "green"),
+          stat("Start", o.start_time, o.mission_date || ""),
+        ]
+      : [
+          stat("Flight", o.flight, o.role || "", "amber"),
+          stat("Package", o.package, o.package_type || ""),
+          stat("Time on Target", o.time_on_target, "", "green"),
+          stat("Target", o.target_icao || "—", o.target_area || ""),
+        ]
+  ).join("");
+
+  if (isDcs(d)) {
+    const c = b.consumables || {};
+    return (
+      pageHead("Mission Brief", o.mission || "") +
+      banners(d.warnings) +
+      `<div class="grid c4">${cards}</div>` +
+      `<div class="grid c4" style="margin-top:12px">
+        ${stat("Fuel", c.fuel_lb ? `${c.fuel_lb.toLocaleString()} lb` : "—", "internal + external")}
+        ${stat("Flares", c.flare != null ? String(c.flare) : "—")}
+        ${stat("Chaff", c.chaff != null ? String(c.chaff) : "—")}
+        ${stat("Gun", c.gun_percent != null ? `${c.gun_percent}%` : "—")}
+      </div>` +
+      `<div class="grid" style="margin-top:12px">${card(
+        "Mission Briefing",
+        prose(b.situation, "This mission carries no briefing text.")
+      )}</div>`
+    );
+  }
 
   const detail = [
     card(
@@ -253,6 +285,7 @@ function storeBlock(store, index, prefix) {
 
   return `<div class="store" id="${prefix}-${index}">
     <div class="store-head" data-store="${prefix}-${index}">
+      ${store.station ? `<span class="count dim" title="station">${esc(store.station)}</span>` : ""}
       <span class="count">${store.count}&times;</span>
       <span class="name">${esc(store.name)}</span>
       ${tags.join(" ")}
@@ -275,11 +308,15 @@ function renderLoadout(d) {
 
   const head = [
     stat("Flight", player.callsign, `${player.aircraft.length} aircraft`, "amber"),
-    stat(
-      "Stores Weight",
-      lead.total_weight_lb ? `${lead.total_weight_lb} lb` : "—",
-      "per aircraft, game data"
-    ),
+    // DCS publishes no per-store weight worth trusting, so the slot shows the
+    // airframe instead of an empty figure with a misleading caption.
+    isDcs(d)
+      ? stat("Aircraft", lead.label || "—", "from the mission file")
+      : stat(
+          "Stores Weight",
+          lead.total_weight_lb ? `${lead.total_weight_lb} lb` : "—",
+          "per aircraft, game data"
+        ),
     stat("Store Types", String(lead.stores.length), "distinct stores loaded"),
     stat(
       "Laser Code",
@@ -434,6 +471,51 @@ function renderComms(d) {
   const comms = b.comms || { rows: [] };
   const dtc = d.dtc || { uhf: [], vhf: [] };
 
+  // DCS has no comm ladder or IFF rotation; what it does have is the aircraft's
+  // programmed preset channels, one block per radio.
+  if (isDcs(d)) {
+    const rows = comms.rows.map((r) => [
+      esc(r.agency),
+      `<span style="color:var(--cyan)">${esc(r.callsign)}</span>`,
+      dim(r.uhf),
+      `<span class="wrap dim">${esc(r.notes)}</span>`,
+    ]);
+    const radios = (b.radios || [])
+      .map((radio) =>
+        card(
+          radio.radio,
+          table(
+            ["#", "Freq"],
+            radio.presets.map((p) => [
+              `<span style="color:var(--amber)">${p.preset}</span>`,
+              esc(p.frequency),
+            ])
+          )
+        )
+      )
+      .join("");
+    return (
+      pageHead("Communications", "from the mission's radio presets") +
+      `<div class="grid">${card(
+        "Flight and Support",
+        table(["Agency", "Callsign", "Frequency", "Notes"], rows, {
+          empty: "No frequencies in the mission.",
+        })
+      )}</div>` +
+      `<div class="grid c3" style="margin-top:12px">${
+        radios || card("Presets", '<div class="empty">No presets programmed.</div>')
+      }</div>` +
+      `<div class="grid" style="margin-top:12px">${card(
+        "Note",
+        '<div class="hint">These are the preset channels stored in the mission for your ' +
+          "aircraft. DCS has no comm-ladder or IFF-rotation equivalent, so those panels " +
+          "are not shown. Only tanker and AWACS groups are listed above &mdash; DCS group " +
+          "tasks do not reliably describe what a generated group actually does, so " +
+          "labelling the rest would be guesswork.</div>"
+      )}</div>`
+    );
+  }
+
   const ladderRows = comms.rows.map((r) => [
     esc(r.agency),
     val(r.callsign) && r.callsign !== "None"
@@ -534,6 +616,22 @@ function renderThreats(d) {
     `<span class="wrap dim">${esc(s.detail)}</span>`,
   ]);
 
+  if (isDcs(d)) {
+    return (
+      pageHead("Threats & Support") +
+      '<div class="banner">DCS missions carry no threat brief. The mission file lists every ' +
+      "unit on the map, but nothing marks which are a threat to your route, so building " +
+      "a threat picture from it would be invention rather than reading. Check the mission " +
+      "briefing text and your own kneeboard pages instead.</div>" +
+      `<div class="grid" style="margin-top:12px">${card(
+        "Support Assets",
+        table(["Callsign", "Type", "Asset", "TACAN", "Station"], rows, {
+          empty: "No tanker or AWACS groups found in the mission.",
+        })
+      )}</div>`
+    );
+  }
+
   return (
     pageHead("Threats & Support") +
     `<div class="grid">${card("Threat Analysis", prose(b.threats))}</div>` +
@@ -558,13 +656,15 @@ function renderWeather(d) {
     const row = (wx.rows || []).find((r) => r.label.toLowerCase().startsWith(label));
     return row ? row.values[0] : "";
   };
+  // BMS forecasts per phase of flight; DCS weather applies to the whole mission.
+  const when = isDcs(d) ? "mission-wide" : "at takeoff";
   return (
     pageHead("Weather") +
     `<div class="grid c4">
-      ${stat("Conditions", pick("situation"), "at takeoff")}
-      ${stat("Wind", pick("wind"), "at takeoff")}
-      ${stat("Visibility", pick("visibility"), "at takeoff", "green")}
-      ${stat("Cloud Base", pick("cloud"), "at takeoff")}
+      ${stat("Conditions", pick("situation"), when)}
+      ${stat("Wind", pick("wind"), when)}
+      ${stat("Visibility", pick("visibility"), when, "green")}
+      ${stat("Cloud Base", pick("cloud"), when)}
     </div>` +
     `<div class="grid" style="margin-top:12px">${card(
       "Full Forecast",
@@ -579,6 +679,35 @@ function renderCharts(d) {
   const resolved = (d.charts || {}).resolved || [];
   const airfields = (d.charts || {}).airfields || [];
   const summary = (d.charts || {}).summary || {};
+
+  // DCS ships no approach plates. What it can carry is kneeboard pages the
+  // mission generator embedded in the .miz, which is what goes here instead.
+  if (isDcs(d)) {
+    const pages = (d.charts || {}).pages || [];
+    if (!pages.length) {
+      return (
+        pageHead("Kneeboard Pages") +
+        '<div class="banner">This mission embeds no kneeboard pages, and DCS ships no ' +
+        "approach plates, so there is nothing to show here. Mission generators such as " +
+        "Retribution add pages to the .miz; stock missions usually do not.</div>"
+      );
+    }
+    let chosen = viewerChoice.page;
+    if (!chosen || !pages.some((p) => p.entry === chosen)) chosen = pages[0].entry;
+    const buttons = pages
+      .map(
+        (p, i) =>
+          `<button data-page="${esc(p.entry)}" class="${p.entry === chosen ? "active" : ""}">${
+            esc(p.aircraft ? `${p.aircraft} ` : "")
+          }${esc(p.name)}</button>`
+      )
+      .join("");
+    return (
+      pageHead("Kneeboard Pages", `${pages.length} embedded in the mission`) +
+      `<div class="chart-list">${buttons}</div>` +
+      viewerFor(`/page/${encodeURI(chosen)}`, chosen)
+    );
+  }
 
   const found = resolved.filter((r) => r.found);
   const options = airfields
@@ -670,6 +799,12 @@ function renderChartArea() {
 
 function renderMaps(d) {
   const maps = (d.charts || {}).maps || [];
+  if (isDcs(d) && !maps.length)
+    return (
+      pageHead("Maps") +
+      '<div class="banner">DCS ships no theatre maps as image files, so there is nothing ' +
+      "to show here. The Kneeboard Pages tab carries whatever the mission embedded.</div>"
+    );
   if (!maps.length)
     return pageHead("Maps") + '<div class="empty">No maps found in the BMS Docs folder.</div>';
 
@@ -893,6 +1028,30 @@ function renderMain() {
     );
     wirePanZoom(main);
   }
+
+  // DCS kneeboard pages live on the charts tab.
+  main.querySelectorAll("[data-page]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      viewerChoice.page = btn.dataset.page;
+      renderMain();
+    })
+  );
+  if (isDcs()) wirePanZoom(main);
+}
+
+/** Cycle the sim preference: auto -> bms -> dcs -> auto. */
+async function cycleSim() {
+  const sims = (DATA && DATA.sims) || { available: [], preference: "auto" };
+  const order = ["auto", ...sims.available];
+  const next = order[(order.indexOf(sims.preference) + 1) % order.length];
+  try {
+    await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sim: next }),
+    });
+    await load(true);
+  } catch (e) {}
 }
 
 async function saveLaser(field, input) {
@@ -938,8 +1097,24 @@ function renderStatus() {
     return;
   }
   const install = DATA.install || {};
-  sub.textContent = `BMS ${install.version || "?"}`;
+  const sims = DATA.sims || { available: [], preference: "auto", active: DATA.sim };
+  sub.textContent =
+    DATA.sim === "dcs"
+      ? `DCS ${install.version || ""}`.trim()
+      : `BMS ${install.version || "?"}`;
   fresh.innerHTML = '<span class="live">&#9679; live</span>';
+
+  // The sim button doubles as the indicator of which sim is showing.
+  const simBtn = document.getElementById("sim-btn");
+  if (simBtn) {
+    const active = (sims.active || DATA.sim || "").toUpperCase();
+    simBtn.textContent = sims.preference === "auto" ? `${active} (auto)` : active;
+    simBtn.classList.toggle("on", sims.preference !== "auto");
+    simBtn.title =
+      sims.available.length > 1
+        ? "Click to change which sim the board reads (auto follows the newest mission)"
+        : "Only one sim was found";
+  }
 
   const b = DATA.briefing || {};
   const app = DATA.app || {};
@@ -954,9 +1129,16 @@ function renderStatus() {
         upd.status === "updated" ? ' <span class="live">· updated</span>' : ""
       }`;
 
-  gen.innerHTML =
-    (b.generated ? `brief ${esc(b.generated)}` : "no briefing yet") +
-    `<br>${versionLine}`;
+  const sourceLine =
+    DATA.sim === "dcs"
+      ? install.mission_name
+        ? `miz ${esc(install.mission_name)}`
+        : "no mission found"
+      : b.generated
+      ? `brief ${esc(b.generated)}`
+      : "no briefing yet";
+
+  gen.innerHTML = sourceLine + `<br>${versionLine}`;
 }
 
 async function load(force = false) {
@@ -990,6 +1172,7 @@ document.addEventListener("keydown", (e) => {
 document
   .getElementById("theme-btn")
   .addEventListener("click", () => applyTheme(themeNow() === "day" ? "night" : "day"));
+document.getElementById("sim-btn").addEventListener("click", cycleSim);
 
 applyTheme(themeNow());
 renderNav();

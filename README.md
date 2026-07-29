@@ -1,12 +1,21 @@
 # BMS Kneeboard
 
-A second-monitor kneeboard for Falcon BMS. It reads the briefing BMS exports,
-pulls the matching approach plates and theatre maps out of your BMS install, and
-turns your loadout into an employment reference — automatically, every time you
-commit to a new mission.
+A second-monitor kneeboard for **Falcon BMS** and **DCS World**. It reads what
+the sim already writes, pulls in the matching charts, and turns your loadout into
+an employment reference — automatically, every time you take a new mission.
 
 Runs as a small local web server, so the same board also opens on a tablet or
 phone over your LAN.
+
+## Which sim it shows
+
+The board reads both installs and, by default, shows whichever wrote a mission
+most recently — BMS's `briefing.txt` or the newest `.miz` under
+`Saved Games\DCS\Missions`. The button under the nav shows what is active
+(`BMS (auto)`) and cycles through auto → BMS → DCS if you want to pin it.
+
+The two sims expose very different amounts of data, so what each page shows
+differs. See [DCS support](#dcs-support) for exactly what carries over.
 
 ## Running it
 
@@ -28,6 +37,8 @@ it explicitly:
 ```bash
 python kneeboard.py --bms-path "D:\Falcon BMS 4.38"
 ```
+
+DCS is found the same way, and can be pointed at with `--dcs-path`.
 
 Other options: `--port` (default 5000), `--host`, `--no-browser`, `--no-update`,
 `--check-update` (report whether an update is waiting, then exit).
@@ -150,6 +161,57 @@ from the game files, not a fuel load.
 The curated employment notes are planning guidance drawn from the BMS manuals and
 standard Viper procedures. They are a reference, not certified release tables.
 
+## DCS support
+
+DCS exports nothing for external tools — there is no equivalent of BMS's
+`briefing.txt`. Everything comes out of the mission `.miz`, which is a zip
+containing the mission as a Lua table.
+
+| Page | What DCS gives you |
+|---|---|
+| **Brief** | Mission briefing text, airframe, task, theatre, date, start time, time on target, plus fuel, flares, chaff and gun state |
+| **Loadout** | Every station with the store on it and full employment detail for stores in the curated library |
+| **Steer** | The full route: waypoint names, altitudes, speeds, ETAs, and computed leg distance and bearing |
+| **Comms** | The aircraft's programmed preset channels, one block per radio, plus tanker and AWACS frequencies |
+| **Weather** | Cloud base and thickness, wind at three altitudes, visibility, temperature, QNH |
+| **Charts** | Kneeboard pages the mission generator embedded in the `.miz` (Retribution adds these; stock missions usually do not) |
+| **Threats** | Nothing — see below |
+| **Maps** | Nothing — DCS ships no theatre map images |
+
+### What DCS deliberately does not show, and why
+
+**Weapon names come from a curated library, not the game files.** DCS builds its
+own CLSID-to-name mapping by *executing* Lua at load time, so there is no table
+to read. Three extraction approaches were tried and all rejected: proximity
+matching reached 44% and mislabelled an ALQ-184 as a Soviet recon pod;
+enclosing-block matching reached 35% with conflicting answers; literal
+declaration arguments were accurate but covered only a handful. So names are
+hand-curated for the **F/A-18C, A-10C and AV-8B N/A**. Anything outside that is
+shown as its raw CLSID and flagged as having no reference data — a wrong weapon
+name on a kneeboard is worse than an unresolved code.
+
+**No weights or ranges.** `Falcon4_WCD.xml` gives BMS trustworthy per-store
+weights and missile ranges. DCS publishes no equivalent, so those fields stay
+empty rather than being invented.
+
+**No threat picture.** A DCS mission lists every unit on the map, but nothing
+marks which are a threat to your route. Building a threat brief from that would
+be invention, not reading.
+
+**No waypoint coordinates.** DCS positions are metres in a projection that
+differs per terrain. Converting without the terrain's parameters would produce
+confident nonsense. Leg **distance and bearing** *are* computed, because those
+are valid from the raw offsets.
+
+**Wind is reported as the direction it comes from.** DCS stores the direction the
+wind blows *toward*, rotated 180° from the convention the Mission Editor
+displays. The board converts it and says "from" in the value so the convention is
+explicit rather than assumed.
+
+**Only tanker and AWACS groups are listed as support.** DCS group tasks do not
+reliably describe what a generated group does — a BARCAP in the test mission was
+tagged `Transport`. Labelling the rest would be guesswork.
+
 ## Layout
 
 ```
@@ -161,9 +223,16 @@ bmskb/
   dtc.py                  dtc_comm.txt radio preset parser
   weapons.py              WCD weapon data joined to the curated library
   charts.py               chart and map indexing, ICAO matching
-  state.py                payload assembly, caching, change detection, validation
+  state.py                source selection, payload assembly, caching, validation
   selfupdate.py           safe fast-forward self-update on startup
   data/f16_stores.json    curated F-16 store reference
+  dcs/
+    install.py            DCS discovery and mission listing
+    luaparse.py           parser for the Lua table dialect .miz files use
+    mission.py            .miz reader, unit conversion, route geometry
+    weapons.py            CLSID lookup against the curated library
+    source.py             DCS payload assembly
+    data/dcs_stores.json  curated F/A-18C, A-10C and AV-8B store reference
 templates/index.html      page shell
 static/css, static/js     styling and renderer
 ```

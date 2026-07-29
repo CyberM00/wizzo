@@ -1,0 +1,638 @@
+{
+  "_about": "Curated DCS store reference, keyed by the CLSID codes DCS writes into a mission's pylon table. Covers the F/A-18C, A-10C and AV-8B N/A. DCS builds its own CLSID-to-name mapping by executing Lua at load time, so it cannot be read out of the game files reliably -- three separate extraction attempts produced incomplete and, worse, mismatched names. Everything here is identified by hand from self-documenting CLSID codes and verified declarations. Anything not listed is shown as its raw CLSID and flagged as having no reference data, rather than guessed at.",
+  "_quantity_note": "A rack CLSID represents more than one weapon (BRU-42_2*GBU-38 is two bombs). Where that applies, 'quantity' gives the number carried on that single pylon.",
+  "stores": [
+    {
+      "match": ["{40EF17B7-F508-45de-8566-6FFECC0C1AB8}", "LAU-115_2*LAU-127_AIM-120C", "{C8E06185-7CD6-4C90-959F-044679E90751}"],
+      "name": "AIM-120C AMRAAM",
+      "category": "aam",
+      "category_label": "Air-to-Air",
+      "guidance": "Active radar, inertial midcourse then autonomous terminal",
+      "role": "Beyond-visual-range air-to-air",
+      "employment": [
+        "Launch high and fast -- range scales strongly with launch altitude and Mach.",
+        "Support the shot until the missile goes active, then you are free to manoeuvre.",
+        "Shots at maximum range against a manoeuvring target are easily defeated. Closer is where kills come from.",
+        "In the Hornet, the attack format shows the shoot cue and time to active; respect the minimum abort range."
+      ],
+      "fuzing": "Proximity/impact, no aircrew setting.",
+      "laser": false
+    },
+    {
+      "match": ["{5CE2FF2A-645A-4197-B48D-8720AC69394F}"],
+      "name": "AIM-9X Sidewinder",
+      "category": "aam",
+      "category_label": "Air-to-Air",
+      "guidance": "Imaging infrared, high off-boresight",
+      "role": "Within-visual-range air-to-air",
+      "employment": [
+        "All-aspect with a wide off-boresight capability -- it will take shots well outside the HUD field of view.",
+        "Best results inside 5 nm; long-range IR shots bleed energy and are defeated by a turn.",
+        "Uncage before launch so the seeker tracks the target rather than the boresight."
+      ],
+      "fuzing": "Proximity/impact.",
+      "laser": false
+    },
+    {
+      "match": ["{6CEB49FC-DED8-4DED-B053-E1F033FF72D3}", "LAU-115_2*LAU-127_AIM-9M", "{AIM-9M-ON-ADAPTER}", "{LAU-138 wtip - AIM-9M}", "LAU-105_1*CATM-9M_R"],
+      "name": "AIM-9M Sidewinder",
+      "category": "aam",
+      "category_label": "Air-to-Air",
+      "guidance": "Infrared homing",
+      "role": "Within-visual-range air-to-air",
+      "employment": [
+        "All-aspect but the rear quarter remains by far the highest-probability shot.",
+        "Uncage the seeker and listen for the growl to confirm a good lock before firing.",
+        "Practical envelope is roughly 1-5 nm.",
+        "A CATM variant is a captive training round -- it will not launch."
+      ],
+      "fuzing": "Proximity/impact.",
+      "laser": false
+    },
+    {
+      "match": ["{LAU-115 - AIM-7M}", "{SHOULDER AIM-7MH}"],
+      "name": "AIM-7M Sparrow",
+      "category": "aam",
+      "category_label": "Air-to-Air",
+      "guidance": "Semi-active radar -- requires continuous illumination",
+      "role": "Medium-range air-to-air",
+      "employment": [
+        "You must keep the target locked and illuminated all the way to impact. Break lock and the missile is lost.",
+        "That commitment is the whole cost of the weapon -- you cannot turn away or engage another target while it flies.",
+        "Carried when AMRAAM is unavailable; treat every shot as a sustained commitment."
+      ],
+      "fuzing": "Proximity/impact.",
+      "laser": false
+    },
+    {
+      "match": ["{GBU_31_V_2B}", "{GBU-31}", "{GBU_31_V_4B}", "{GBU-31V3B}", "{CFT_L_GBU_31V3B_x_2}", "{CFT_R_GBU_31V3B_x_2}"],
+      "name": "GBU-31 JDAM (2000 lb)",
+      "category": "bomb-gps",
+      "category_label": "GPS/INS bomb (JDAM)",
+      "guidance": "GPS with inertial backup -- no laser required",
+      "role": "All-weather precision attack on fixed coordinates",
+      "employment": [
+        "Fire and forget. Once released you may turn away immediately.",
+        "Accuracy depends entirely on target coordinate quality -- verify the coordinates before release.",
+        "Release inside the launch acceptable region cue. From 20-25k ft it reaches roughly 12-15 nm.",
+        "Genuinely all-weather; cloud between you and the target does not matter.",
+        "The V3 variant is a BLU-109 penetrator for hardened targets; the V1 and V4 are blast-fragmentation."
+      ],
+      "fuzing": "Programmable. Set arming and function delay before release.",
+      "laser": false
+    },
+    {
+      "match": ["{GBU_32_V_2B}"],
+      "name": "GBU-32 JDAM (1000 lb)",
+      "category": "bomb-gps",
+      "category_label": "GPS/INS bomb (JDAM)",
+      "guidance": "GPS with inertial backup -- no laser required",
+      "role": "All-weather precision attack on fixed coordinates",
+      "employment": [
+        "Fire and forget on GPS coordinates -- turn away as soon as it is off the rail.",
+        "The 1000 lb class is the middle option: more effect than a GBU-38, less overkill than a GBU-31.",
+        "Release inside the launch acceptable region; higher and faster gives more standoff.",
+        "Verify target coordinates before release -- a JDAM will hit exactly the wrong place with perfect accuracy.",
+        "Set impact azimuth and angle where the approach geometry matters, such as a runway or a bunker face."
+      ],
+      "fuzing": "Programmable. Set arming and function delay before release.",
+      "laser": false
+    },
+    {
+      "match": ["{GBU-38}", "{BRU55_2*GBU-38}", "{BRU-42_2*GBU-38_LEFT}", "{BRU-42_2*GBU-38_RIGHT}"],
+      "name": "GBU-38 JDAM (500 lb)",
+      "category": "bomb-gps",
+      "category_label": "GPS/INS bomb (JDAM)",
+      "guidance": "GPS with inertial backup",
+      "role": "Precision attack with reduced collateral effect",
+      "employment": [
+        "Fire and forget on coordinates. The smallest JDAM, so useful where a 2000 lb blast is unacceptable.",
+        "Multiple rounds per rack means several aimpoints in one pass -- assign each weapon its own target.",
+        "Release inside the launch acceptable region cue.",
+        "Coordinate quality is everything; confirm before release."
+      ],
+      "fuzing": "Programmable.",
+      "laser": false,
+      "quantity": 2
+    },
+    {
+      "match": ["{GBU_54_V_1B}"],
+      "name": "GBU-54 Laser JDAM (500 lb)",
+      "category": "bomb-gps",
+      "category_label": "Dual-mode GPS + laser bomb",
+      "guidance": "GPS/INS with semi-active laser terminal",
+      "role": "Precision attack, including moving targets",
+      "employment": [
+        "Can be employed as a pure GPS weapon, or with terminal laser guidance against something that moves.",
+        "Laser mode is the reason to carry it -- GPS alone cannot hit a vehicle that drives away.",
+        "In laser mode, lase through impact exactly as with a conventional laser-guided bomb.",
+        "Confirm the intended mode before release; the delivery profile differs."
+      ],
+      "fuzing": "Programmable.",
+      "laser": true,
+      "laser_note": "Laser code applies in laser mode and must match the designating pod."
+    },
+    {
+      "match": ["BRU-42_3*GBU-12", "{BRU33_2X_GBU-12}", "{BRU-42A_2*GBU-12_SIDE_LEFT}", "{BRU-42A_2*GBU-12_SIDE_RIGHT}"],
+      "name": "GBU-12 Paveway II (500 lb)",
+      "category": "bomb-lgb",
+      "category_label": "Laser-guided bomb",
+      "guidance": "Semi-active laser",
+      "role": "Precision attack on point targets, including moving ones",
+      "employment": [
+        "Release into the glide envelope, then lase continuously through impact. Stop lasing and the bomb goes ballistic.",
+        "Typical delivery: 15-20k ft, shallow dive or level, 4-8 nm slant range.",
+        "Begin lasing roughly 8-12 seconds before impact. Lasing too early bleeds energy and can fall short.",
+        "Keep the target inside the pod's field of regard for the whole time of flight.",
+        "Cloud, smoke or dust between pod and target breaks the laser and the bomb misses."
+      ],
+      "fuzing": "Instantaneous for soft targets, delayed for structures.",
+      "laser": true,
+      "laser_note": "The weapon's code must match the designating pod, whether yours or a buddy's.",
+      "requires": ["Targeting pod, or another aircraft lasing on your code"],
+      "quantity": 2
+    },
+    {
+      "match": ["{BDU-50LGB}"],
+      "name": "BDU-50 LGB (practice)",
+      "category": "bomb-lgb",
+      "category_label": "Practice laser-guided bomb",
+      "guidance": "Semi-active laser, inert",
+      "role": "Training",
+      "employment": [
+        "Inert practice shape with laser guidance -- scores the delivery without the warhead.",
+        "Employ exactly as a GBU-12: lase through impact."
+      ],
+      "fuzing": "Inert, spotting charge only.",
+      "laser": true,
+      "requires": ["Targeting pod"]
+    },
+    {
+      "match": ["{BRU33_2X_MK-82}", "{BRU-42_2*Mk-82_LEFT}", "{BRU-42_2*Mk-82_RIGHT}", "{BRU-42_3*Mk-82LD}"],
+      "name": "Mk-82 (500 lb, low drag)",
+      "category": "bomb-unguided",
+      "category_label": "Unguided bomb (low drag)",
+      "guidance": "Ballistic",
+      "role": "General-purpose attack",
+      "employment": [
+        "A 30-45 degree dive released from 8-12k ft AGL gives good accuracy with adequate frag separation.",
+        "Low-level level releases with low-drag bombs are hazardous -- you fly through your own frag pattern.",
+        "Accuracy is very sensitive to release conditions: wings level, steady G, on speed.",
+        "Ripple pairs across an area target rather than aiming singles."
+      ],
+      "fuzing": "Set arming delay before release; longer for penetration, shorter for surface burst.",
+      "laser": false,
+      "quantity": 2
+    },
+    {
+      "match": ["{Mk82SNAKEYE}", "{BRU33_2X_MK-82_Snakeye}", "{BRU-42_2*Mk-82SNAKEYE_LEFT}", "{BRU-42_2*Mk-82SNAKEYE_RIGHT}", "{BRU-42_3*Mk-82SNAKEYE}", "{Mk82AIR}", "{BRU-42_3*Mk-82AIR}"],
+      "name": "Mk-82 Snakeye / AIR (500 lb, high drag)",
+      "category": "bomb-unguided",
+      "category_label": "Unguided bomb (high drag)",
+      "guidance": "Ballistic, retarded",
+      "role": "Low-altitude general-purpose attack",
+      "employment": [
+        "The retarder opens after release and steepens the fall, so you can release low and still escape the frag.",
+        "Intended for low-level laydown deliveries.",
+        "Confirm the retarded profile is selected, or the aiming solution uses the wrong ballistics and the bombs fall long.",
+        "Markedly less accurate from medium altitude -- use low drag or guided stores from height."
+      ],
+      "fuzing": "Retarded arming; the ballute or fins must deploy for the profile to work.",
+      "laser": false,
+      "quantity": 2
+    },
+    {
+      "match": ["{BRU33_2X_MK-83}", "{BRU-42_2*Mk-83_LEFT}", "{BRU-42_2*Mk-83_RIGHT}", "{7A44FF09-527C-4B7E-B42B-3F111CFE50FB}"],
+      "name": "Mk-83 (1000 lb)",
+      "category": "bomb-unguided",
+      "category_label": "Unguided bomb (low drag)",
+      "guidance": "Ballistic",
+      "role": "General-purpose attack on structures",
+      "employment": [
+        "Twice the warhead of a Mk-82 -- for structures and hardened surface targets rather than area work.",
+        "Dive delivery from medium altitude; the larger frag envelope demands more release altitude.",
+        "Keep the release conditions steady; ballistic accuracy is unforgiving."
+      ],
+      "fuzing": "Set arming delay to suit the target.",
+      "laser": false,
+      "quantity": 2
+    },
+    {
+      "match": ["{BRU33_2X_ROCKEYE}", "{BRU-42_2*MK-20_LEFT}", "{BRU-42_2*MK-20_RIGHT}"],
+      "name": "Mk-20 Rockeye",
+      "category": "cluster",
+      "category_label": "Cluster bomb",
+      "guidance": "Ballistic dispenser",
+      "role": "Anti-armour and area attack",
+      "employment": [
+        "Opens at a set height and spreads shaped-charge bomblets -- you are aiming a footprint, not a point.",
+        "Effective against thin-skinned vehicles and soft targets; poor against modern armour.",
+        "Release from medium altitude in a shallow dive; wind drift across the footprint is significant."
+      ],
+      "fuzing": "Dispenser opening height governs the pattern.",
+      "laser": false,
+      "quantity": 2
+    },
+    {
+      "match": ["{CBU-87}", "{BRU33_2X_CBU-99}"],
+      "name": "CBU-87 / CBU-99 CEM",
+      "category": "cluster",
+      "category_label": "Cluster bomb",
+      "guidance": "Ballistic dispenser",
+      "role": "Area attack on soft targets, vehicles and personnel",
+      "employment": [
+        "Combined-effects bomblets over a wide footprint. Height of function sets the pattern: lower is tighter and denser.",
+        "Release from medium altitude in a shallow dive.",
+        "Ineffective against armour and hardened targets -- use on trucks, guns, air defence sites and troops."
+      ],
+      "fuzing": "Proximity fuze sets the height of function.",
+      "laser": false
+    },
+    {
+      "match": ["{CBU_103}"],
+      "name": "CBU-103 (WCMD)",
+      "category": "cluster",
+      "category_label": "Wind-corrected cluster",
+      "guidance": "Inertial tail kit with wind correction",
+      "role": "Accurate area attack from medium/high altitude",
+      "employment": [
+        "The tail kit corrects the wind drift that ruins unguided cluster accuracy, so it can be released from height above light defences.",
+        "Still a footprint weapon; height of function governs the pattern.",
+        "Preferred over the CBU-87 whenever the threat forces a higher release."
+      ],
+      "fuzing": "Programmable height of function.",
+      "laser": false
+    },
+    {
+      "match": ["{CBU_105}"],
+      "name": "CBU-105 (WCMD, sensor-fuzed)",
+      "category": "cluster",
+      "category_label": "Sensor-fuzed weapon",
+      "guidance": "Wind-corrected dispenser with self-guiding skeets",
+      "role": "Anti-armour",
+      "employment": [
+        "The skeet submunitions find vehicles individually and fire downward at the hottest part of each -- a purpose-built armour killer.",
+        "One weapon can disable several vehicles in a column.",
+        "Needs a dispersed vehicle target; wasted on infantry, buildings or empty ground.",
+        "Wind correction makes it accurate from high altitude, which keeps you above short-range defences."
+      ],
+      "fuzing": "Set height of function; the submunitions then work autonomously.",
+      "laser": false
+    },
+    {
+      "match": ["{BDU-50LD}", "{BDU-50HD}", "BRU-42_3*BDU-33"],
+      "name": "BDU practice bomb",
+      "category": "bomb-unguided",
+      "category_label": "Practice bomb",
+      "guidance": "Ballistic, inert",
+      "role": "Training",
+      "employment": [
+        "Inert shape matching the ballistics of the live weapon it represents.",
+        "BDU-33 is a small spotting round; BDU-50 matches a Mk-82. HD is the retarded variant.",
+        "Useful for practising delivery profiles without expending ordnance."
+      ],
+      "fuzing": "Spotting charge only.",
+      "laser": false
+    },
+    {
+      "match": ["LAU_117_AGM_65F"],
+      "name": "AGM-65F Maverick (IIR, anti-ship)",
+      "category": "agm",
+      "category_label": "Air-to-ground missile",
+      "guidance": "Imaging infrared, lock before launch",
+      "role": "Anti-shipping and large hardened targets",
+      "employment": [
+        "Power the seeker up early -- imaging infrared needs cooling time before it will track.",
+        "Lock before launch, then it is fire and forget; turn away immediately.",
+        "The F carries the heavy blast-fragmentation warhead and a seeker tuned for ship-sized targets.",
+        "Handing off from the targeting pod is far quicker than hunting on the narrow missile video."
+      ],
+      "fuzing": "Impact, delayed for penetration.",
+      "laser": false
+    },
+    {
+      "match": ["LAU_117_AGM_65G", "LAU_117_CATM_65K", "LAU_117_TGM_65G", "LAU_117_TGM_65D", "LAU_117_TGM_65H"],
+      "name": "AGM-65G/K Maverick (IIR)",
+      "category": "agm",
+      "category_label": "Air-to-ground missile",
+      "guidance": "Imaging infrared, lock before launch",
+      "role": "Hardened points, structures and large vehicles",
+      "employment": [
+        "Cool the seeker before employment; an uncooled IIR seeker will not lock.",
+        "Lock before launch and you can turn away immediately.",
+        "Heavy penetrating warhead -- use on buildings, bunkers and bridges rather than trucks.",
+        "A TGM or CATM designation is a training round and will not fire."
+      ],
+      "fuzing": "Impact with delay.",
+      "laser": false
+    },
+    {
+      "match": ["LAU_117_AGM_65H", "LAU_88_AGM_65H_2_L", "LAU_88_AGM_65H_2_R", "LAU_88_AGM_65H_3"],
+      "name": "AGM-65H Maverick (CCD)",
+      "category": "agm",
+      "category_label": "Air-to-ground missile",
+      "guidance": "Charge-coupled device (daylight TV), lock before launch",
+      "role": "Vehicles and point targets in daylight",
+      "employment": [
+        "Daylight electro-optical seeker -- needs visual contrast on the target, so it is poor at night or in haze.",
+        "Lock before launch; fire and forget once locked.",
+        "The triple rail carries three rounds on one pylon, giving useful magazine depth for a vehicle column.",
+        "Practical launch range 6-10 nm from medium altitude, limited by the seeker resolving the target."
+      ],
+      "fuzing": "Impact.",
+      "laser": false
+    },
+    {
+      "match": ["LAU_117_AGM_65L"],
+      "name": "AGM-65L Maverick (laser)",
+      "category": "agm",
+      "category_label": "Laser Maverick",
+      "guidance": "Semi-active laser",
+      "role": "Precision attack, including buddy designation",
+      "employment": [
+        "Guides on a laser spot rather than an image, so it works against targets a seeker could not resolve.",
+        "Suited to buddy lasing and forward air controller designation -- everyone must agree the code first.",
+        "Lase from before launch through impact.",
+        "Confirm the missile's code matches the designating pod before committing to the pass."
+      ],
+      "fuzing": "Impact.",
+      "laser": true,
+      "laser_note": "Code must match the designating pod, yours or a buddy's.",
+      "requires": ["Targeting pod or external designator"]
+    },
+    {
+      "match": ["{AGM_122_SIDEARM}", "{LAU_7_AGM_122_SIDEARM}"],
+      "name": "AGM-122 Sidearm",
+      "category": "arm",
+      "category_label": "Anti-radiation missile",
+      "guidance": "Passive radar homing",
+      "role": "Short-range defence suppression",
+      "employment": [
+        "A Sidewinder airframe with an anti-radiation seeker -- short legged, for self-defence rather than planned suppression.",
+        "Homes on an emitting radar; if the site shuts down the missile is lost, though the shutdown itself suppresses it.",
+        "You must get close, which means entering the threat ring. Weigh that against what it buys.",
+        "Best used reactively against a short-range site that has just come up."
+      ],
+      "fuzing": "Proximity/impact.",
+      "laser": false
+    },
+    {
+      "match": ["{AGM_84D}"],
+      "name": "AGM-84D Harpoon",
+      "category": "standoff",
+      "category_label": "Anti-ship missile",
+      "guidance": "Inertial midcourse, active radar terminal",
+      "role": "Anti-shipping",
+      "employment": [
+        "Long-range fire and forget, launched from well outside a ship's defences.",
+        "Flies a sea-skimming profile and uses its own radar terminally -- give it a target position and launch.",
+        "Very long time of flight; deconflict with friendly shipping and other package elements first.",
+        "Confirm target identity before release. It cannot be recalled."
+      ],
+      "fuzing": "Impact with delayed detonation.",
+      "laser": false
+    },
+    {
+      "match": ["{AGM_84H}"],
+      "name": "AGM-84H SLAM-ER",
+      "category": "standoff",
+      "category_label": "Standoff cruise missile",
+      "guidance": "GPS/INS with imaging infrared terminal and datalink",
+      "role": "Long-range precision land and sea attack",
+      "employment": [
+        "Very long standoff against defended targets, flown to a preplanned route.",
+        "The terminal seeker can be steered over the datalink, letting you refine the aimpoint in flight.",
+        "That control costs commitment -- you must stay within datalink range to use it.",
+        "Long time of flight; sequence it carefully against the rest of the attack."
+      ],
+      "fuzing": "Impact, penetrating.",
+      "laser": false,
+      "requires": ["AWW-13 datalink pod for terminal control"]
+    },
+    {
+      "match": ["{BRU55_2*AGM-154C}"],
+      "name": "AGM-154C JSOW",
+      "category": "standoff",
+      "category_label": "Glide standoff weapon",
+      "guidance": "GPS/INS glide weapon with imaging infrared terminal",
+      "role": "Attack on defended point targets from outside the threat ring",
+      "employment": [
+        "Unpowered glide weapon -- release altitude and speed set the range achieved. High and fast is essential.",
+        "Roughly 40 nm from high altitude, far less from low level.",
+        "Fire and forget on coordinates; verify them before release.",
+        "The C is a unitary penetrator for hardened point targets.",
+        "Long time of flight -- account for it when sequencing with other elements."
+      ],
+      "fuzing": "Programmable penetrator delay.",
+      "laser": false,
+      "quantity": 2
+    },
+    {
+      "match": ["{BRU_42A_x3_ADM_141A}"],
+      "name": "ADM-141A TALD decoy",
+      "category": "standoff",
+      "category_label": "Air-launched decoy",
+      "guidance": "Unguided glide decoy",
+      "role": "Deceiving and provoking air defences",
+      "employment": [
+        "A glide decoy that presents a fighter-sized radar return, drawing air defences into radiating and shooting.",
+        "Released ahead of the strike to saturate and expose the threat picture for the anti-radiation shooters.",
+        "Timing is everything -- too early and the decoys are gone before the strike arrives.",
+        "Carries no warhead. It buys attention, not damage."
+      ],
+      "fuzing": "None.",
+      "laser": false,
+      "quantity": 3
+    },
+    {
+      "match": ["{LAU-131 - 7 AGR-20A}", "{LAU-131 - 7 AGR-20A M282}"],
+      "name": "AGR-20A APKWS (laser-guided rocket)",
+      "category": "rocket",
+      "category_label": "Guided rocket pod",
+      "guidance": "Semi-active laser",
+      "role": "Precision attack on light targets",
+      "employment": [
+        "A laser guidance kit on a Hydra 70 -- precision at a fraction of a missile's cost and weight.",
+        "Seven rounds per pod, so many separate engagements per sortie against light vehicles and personnel.",
+        "Lase from launch through impact as with any laser-guided weapon.",
+        "Small warhead: right for trucks and troops, insufficient for armour or structures."
+      ],
+      "fuzing": "Impact.",
+      "laser": true,
+      "laser_note": "Rocket code must match the designating pod.",
+      "requires": ["Targeting pod"],
+      "quantity": 7
+    },
+    {
+      "match": ["LAU_131x3_HYDRA_70_M156", "{BRU33_2*LAU10}", "{BRU33_2*LAU61}", "{BRU33_2*LAU68_MK5}", "XM158_MK5"],
+      "name": "Unguided rocket pod (Hydra 70 / Zuni)",
+      "category": "rocket",
+      "category_label": "Rocket pod",
+      "guidance": "Unguided",
+      "role": "Area suppression and target marking",
+      "employment": [
+        "Unguided and widely dispersed -- an area weapon, not a precision one.",
+        "Shallow dive, fire in salvos, expect a wide pattern.",
+        "White phosphorus rounds mark targets rather than destroying them.",
+        "Firing means closing well inside short-range air defences. Weigh the threat first."
+      ],
+      "fuzing": "Fixed by rocket type.",
+      "laser": false
+    },
+    {
+      "match": ["{GAU_12_Equalizer}"],
+      "name": "GAU-12 Equalizer gun pod",
+      "category": "gun",
+      "category_label": "Gun pod",
+      "guidance": "Unguided",
+      "role": "Strafe",
+      "employment": [
+        "25 mm cannon carried externally on the Harrier's centreline stations.",
+        "Fire in short bursts; the ammunition goes quickly and the barrel life is finite.",
+        "Strafe in a 10-15 degree dive, open fire around 4000 ft slant, break off by 2000 ft to stay clear of debris.",
+        "Effective against soft-skinned vehicles and personnel, not armour."
+      ],
+      "fuzing": "High-explosive incendiary.",
+      "laser": false
+    },
+    {
+      "match": ["{AN_ASQ_228}"],
+      "name": "AN/ASQ-228 ATFLIR",
+      "category": "pod",
+      "category_label": "Targeting pod",
+      "guidance": "n/a",
+      "role": "Target identification, designation and laser designation",
+      "employment": [
+        "Required for any laser-guided weapon you intend to designate yourself.",
+        "Set and verify the laser code on the pod before stepping; it must match your weapons.",
+        "Point track for fixed targets, area track for moving ones.",
+        "Also your best identification sensor -- use it to confirm the target before release."
+      ],
+      "fuzing": "n/a",
+      "laser": true,
+      "laser_note": "This pod sets the designating code. Everything you lase uses it."
+    },
+    {
+      "match": ["{AAQ-28_LEFT}", "{AAQ-28_RIGHT}", "{AN_AAQ_28}"],
+      "name": "AN/AAQ-28 LITENING",
+      "category": "pod",
+      "category_label": "Targeting pod",
+      "guidance": "n/a",
+      "role": "Target identification, designation and laser designation",
+      "employment": [
+        "Required for self-designated laser-guided weapons.",
+        "Verify the laser code matches your weapons before stepping.",
+        "Slave to a waypoint to find the target area quickly, then refine manually.",
+        "Use it to identify the target before release, especially under restrictive rules of engagement."
+      ],
+      "fuzing": "n/a",
+      "laser": true,
+      "laser_note": "This pod sets the designating code."
+    },
+    {
+      "match": ["{AN_AAQ_33}"],
+      "name": "AN/AAQ-33 Sniper XR",
+      "category": "pod",
+      "category_label": "Targeting pod",
+      "guidance": "n/a",
+      "role": "Long-range identification, designation and laser designation",
+      "employment": [
+        "Longer identification range than earlier pods -- useful for confirming a target from outside the threat ring.",
+        "Set and verify the laser code before stepping.",
+        "Point track for fixed targets, area track for movers.",
+        "Required for any laser-guided weapon you designate yourself."
+      ],
+      "fuzing": "n/a",
+      "laser": true,
+      "laser_note": "This pod sets the designating code."
+    },
+    {
+      "match": ["{AN_ASQ_213}"],
+      "name": "AN/ASQ-213 HARM Targeting System",
+      "category": "pod",
+      "category_label": "HARM targeting pod",
+      "guidance": "n/a",
+      "role": "Emitter detection and anti-radiation targeting",
+      "employment": [
+        "Detects, classifies and ranges radar emitters, driving the attack display.",
+        "Enables precise handoffs and much better awareness of the air defence picture.",
+        "Without it you are limited to pre-planned and reactive shots."
+      ],
+      "fuzing": "n/a",
+      "laser": false
+    },
+    {
+      "match": ["{ALQ_164_RF_Jammer}"],
+      "name": "AN/ALQ-164 ECM pod",
+      "category": "pod",
+      "category_label": "ECM pod",
+      "guidance": "n/a",
+      "role": "Radar jamming and self-protection",
+      "employment": [
+        "The Harrier's self-protection jammer, carried on the centreline.",
+        "Must be switched on to have any effect -- confirm it is powered before entering the threat area.",
+        "Jamming also makes you conspicuous; some crews leave it in standby until spiked.",
+        "It buys time and degrades solutions. It does not replace manoeuvring and chaff."
+      ],
+      "fuzing": "n/a",
+      "laser": false
+    },
+    {
+      "match": ["ALQ_184", "{A111396E-D3E8-4b9c-8AC9-2432489304D5}", "{6D21ECEA-F85B-4E8D-9D51-31DC9B8AA4EF}"],
+      "name": "AN/ALQ-184 ECM pod",
+      "category": "pod",
+      "category_label": "ECM pod",
+      "guidance": "n/a",
+      "role": "Radar jamming and self-protection",
+      "employment": [
+        "Jams threat radars to degrade track quality and spoil shots.",
+        "Confirm it is powered and in the right mode before entering the threat area.",
+        "Does not make you invisible -- it degrades solutions and buys time.",
+        "Still manoeuvre and use chaff; the pod is one layer, not the answer."
+      ],
+      "fuzing": "n/a",
+      "laser": false
+    },
+    {
+      "match": ["{AWW-13}"],
+      "name": "AN/AWW-13 datalink pod",
+      "category": "pod",
+      "category_label": "Datalink pod",
+      "guidance": "n/a",
+      "role": "In-flight control of standoff weapons",
+      "employment": [
+        "Provides the datalink for steering a SLAM-ER or Walleye onto its aimpoint after launch.",
+        "Carrying it commits you to staying within datalink range while the weapon flies.",
+        "Without it those weapons can only be employed on their preplanned coordinates."
+      ],
+      "fuzing": "n/a",
+      "laser": false
+    },
+    {
+      "match": ["{FPU_8A_FUEL_TANK}", "{AV8BNA_AERO1D}", "{EFT_230GAL}", "{F14-300gal}", "{F15E_EXTTANK}", "{IAFS_ComboPak_100}"],
+      "name": "External fuel tank",
+      "category": "tank",
+      "category_label": "External fuel tank",
+      "guidance": "n/a",
+      "role": "Extended range and endurance",
+      "employment": [
+        "Confirm the tanks are actually transferring rather than trapped, or you are carrying dead weight.",
+        "Tanks add drag and restrict the manoeuvring envelope -- know the limit for your configuration.",
+        "Plan to jettison before a serious engagement if fuel state allows. Empty tanks are pure drag."
+      ],
+      "fuzing": "n/a",
+      "laser": false
+    },
+    {
+      "match": ["<CLEAN>", "<CLEAN-200.5>"],
+      "name": "Empty station",
+      "category": "empty",
+      "category_label": "Empty",
+      "guidance": "n/a",
+      "role": "No store carried",
+      "employment": ["Nothing loaded on this station."],
+      "fuzing": "n/a",
+      "laser": false
+    }
+  ]
+}

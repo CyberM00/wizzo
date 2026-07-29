@@ -14,6 +14,10 @@ from pathlib import Path
 
 from .briefing import parse_briefing
 from .charts import ChartLibrary
+from .dcs import source as dcs_source
+from .dcs.install import DcsInstall
+from .dcs.mission import MissionError
+from .dcs.weapons import DcsWeaponLibrary
 from .dtc import parse_dtc_comm
 from .install import BmsInstall
 from .weapons import DATA_DIR, WeaponLibrary
@@ -30,7 +34,12 @@ DEFAULT_SETTINGS = {
     "laser_code": "1688",
     "wingman_laser_code": "",
     "notes": "",
+    # "auto" follows whichever sim wrote a mission most recently; "bms" or
+    # "dcs" pin the board to one.
+    "sim": "auto",
 }
+
+VALID_SIMS = ("auto", "bms", "dcs")
 
 
 def _parse_timestamp(text: str) -> datetime | None:
@@ -68,17 +77,21 @@ def validate_laser_code(code: str) -> tuple[bool, str]:
 class KneeboardState:
     """Caches the parsed kneeboard and rebuilds it when briefing.txt changes."""
 
-    def __init__(self, install: BmsInstall | None):
+    def __init__(self, install: BmsInstall | None, dcs: DcsInstall | None = None):
         self.install = install
+        self.dcs = dcs
         self.lock = threading.Lock()
         self.payload: dict | None = None
         self.signature: tuple | None = None
         self.weapons = WeaponLibrary(install.wcd_file if install else None)
+        self.dcs_weapons = DcsWeaponLibrary()
         self.charts = ChartLibrary(
             install.charts_dir if install else None,
             install.maps_dir if install else None,
         )
         self.settings = self._load_settings()
+        # Kept so the mission archive can be served without reopening it.
+        self.dcs_mission = None
 
     # -- settings --------------------------------------------------------
 
@@ -92,25 +105,86 @@ class KneeboardState:
 
     def update_settings(self, changes: dict) -> dict:
         with self.lock:
+            sim_changed = False
             for key in DEFAULT_SETTINGS:
                 if key in changes:
-                    self.settings[key] = str(changes[key])
+                    value = str(changes[key])
+                    if key == "sim":
+                        if value not in VALID_SIMS:
+                            continue
+                        sim_changed = value != self.settings.get("sim")
+                    self.settings[key] = value
             try:
                 SETTINGS_PATH.write_text(
                     json.dumps(self.settings, indent=2), encoding="utf-8"
                 )
             except OSError:
                 pass
-            if self.payload is not None:
+            if sim_changed:
+                # Switching sim changes the whole board, not just a panel.
+                self.payload = None
+                self.signature = None
+            elif self.payload is not None:
                 self.payload["laser"] = self._laser_block(self.payload.get("loadout", {}))
             return dict(self.settings)
+
+    # -- source selection ------------------------------------------------
+
+    def _bms_mtime(self) -> float:
+        if not self.install or not self.install.briefing_file.is_file():
+            return 0.0
+        try:
+            return self.install.briefing_file.stat().st_mtime
+        except OSError:
+            return 0.0
+
+    def _dcs_mission_path(self):
+        if not self.dcs:
+            return None, 0.0
+        latest = self.dcs.latest_mission()
+        if not latest:
+            return None, 0.0
+        try:
+            return latest, latest.stat().st_mtime
+        except OSError:
+            return latest, 0.0
+
+    def choose_sim(self) -> tuple[str, object]:
+        """Return the sim to display and, for DCS, the mission to read.
+
+        In "auto" the more recently written mission wins, which mirrors how the
+        board already follows briefing.txt without being told.
+        """
+        preference = self.settings.get("sim", "auto")
+        bms_at = self._bms_mtime()
+        dcs_path, dcs_at = self._dcs_mission_path()
+
+        if preference == "bms":
+            return "bms", None
+        if preference == "dcs":
+            return "dcs", dcs_path
+        if dcs_path and dcs_at > bms_at:
+            return "dcs", dcs_path
+        if bms_at:
+            return "bms", None
+        return ("dcs", dcs_path) if dcs_path else ("bms", None)
 
     # -- freshness -------------------------------------------------------
 
     def _current_signature(self) -> tuple:
+        sim, mission = self.choose_sim()
+        if sim == "dcs":
+            if not mission:
+                return ("dcs", "no-mission")
+            try:
+                stat = mission.stat()
+                return ("dcs", str(mission), int(stat.st_mtime), stat.st_size)
+            except OSError:
+                return ("dcs", str(mission), 0, 0)
+
         if not self.install:
             return ("no-install",)
-        parts: list = []
+        parts: list = ["bms"]
         for path in (self.install.briefing_file, self.install.dtc_comm_file):
             try:
                 stat = path.stat()
@@ -132,11 +206,54 @@ class KneeboardState:
 
     # -- assembly --------------------------------------------------------
 
+    def _available_sims(self) -> list[str]:
+        out = []
+        if self.install:
+            out.append("bms")
+        if self.dcs and self.dcs.latest_mission():
+            out.append("dcs")
+        return out
+
     def _build(self) -> dict:
+        sim, mission_path = self.choose_sim()
+        if sim == "dcs" and mission_path is not None:
+            payload = self._build_dcs(mission_path)
+        else:
+            payload = self._build_bms()
+
+        payload["sim"] = payload.get("sim", sim)
+        payload["sims"] = {
+            "available": self._available_sims(),
+            "preference": self.settings.get("sim", "auto"),
+            "active": payload["sim"],
+        }
+        payload["token"] = self.token()
+        return payload
+
+    def _build_dcs(self, mission_path) -> dict:
+        try:
+            payload = dcs_source.build(self.dcs, mission_path, self.dcs_weapons)
+        except MissionError as exc:
+            self.dcs_mission = None
+            return {
+                "sim": "dcs",
+                "ok": False,
+                "install": None,
+                "warnings": [{"level": "error", "text": str(exc)}],
+            }
+
+        self.dcs_mission = payload.pop("_mission", None)
+        payload["laser"] = self._laser_block(payload.get("loadout", {}), sim="dcs")
+        for text in self.dcs_weapons.errors:
+            payload["warnings"].append({"level": "warn", "text": text})
+        return payload
+
+    def _build_bms(self) -> dict:
         warnings: list[dict] = []
 
         if not self.install:
             return {
+                "sim": "bms",
                 "ok": False,
                 "install": None,
                 "warnings": [
@@ -146,7 +263,6 @@ class KneeboardState:
                         "environment variable to your BMS folder and restart.",
                     }
                 ],
-                "token": self.token(),
             }
 
         install_info = self.install.describe()
@@ -221,6 +337,7 @@ class KneeboardState:
                 )
 
         return {
+            "sim": "bms",
             "ok": True,
             "install": install_info,
             "briefing": briefing,
@@ -230,11 +347,11 @@ class KneeboardState:
                 "resolved": resolved_charts,
                 "airfields": self.charts.airfields,
                 "maps": self.charts.maps,
+                "pages": [],
                 "summary": self.charts.describe(),
             },
             "laser": self._laser_block(loadout),
             "warnings": warnings,
-            "token": self.token(),
         }
 
     def _build_loadout(self, briefing: dict) -> dict:
@@ -249,7 +366,7 @@ class KneeboardState:
             "has_player": any(f["is_player"] for f in flights),
         }
 
-    def _laser_block(self, loadout: dict) -> dict:
+    def _laser_block(self, loadout: dict, sim: str = "bms") -> dict:
         needed = any(f.get("needs_laser_code") for f in loadout.get("flights", []))
         stores = sorted(
             {
@@ -266,9 +383,15 @@ class KneeboardState:
             "needed": needed,
             "player_laser_stores": stores,
             "reference": _laser_reference(),
-            "source_note": "Laser codes are set in the in-game DTC and are not written to "
-            "any file BMS exports, so this panel is entered by hand. It is a "
-            "reminder of what you set -- it does not read the jet.",
+            "source_note": (
+                "Laser codes are set in the cockpit and in the mission editor, and are not "
+                "written anywhere this board can read, so this panel is entered by hand. "
+                "It is a reminder of what you set -- it does not read the jet."
+                if sim == "dcs"
+                else "Laser codes are set in the in-game DTC and are not written to any "
+                "file BMS exports, so this panel is entered by hand. It is a reminder "
+                "of what you set -- it does not read the jet."
+            ),
         }
 
     def _freshness_warnings(self, briefing: dict, dtc: dict) -> list[dict]:
