@@ -33,6 +33,56 @@ MMHG_TO_HPA = 1.33322387415
 KG_TO_LB = 2.204622622
 
 AIRCRAFT_KINDS = ("plane", "helicopter")
+
+# DCS unit type ids are terse ("AV8BNA"), and the mission file carries no display
+# name for them, so common modules are mapped here. Anything unmapped falls back
+# to the raw id rather than being guessed at.
+AIRCRAFT_NAMES = {
+    "AV8BNA": "AV-8B N/A",
+    "FA-18C_hornet": "F/A-18C Hornet",
+    "F-16C_50": "F-16C block 50",
+    "F-15ESE": "F-15E Strike Eagle",
+    "F-15C": "F-15C Eagle",
+    "F-14B": "F-14B Tomcat",
+    "F-14A-135-GR": "F-14A Tomcat",
+    "A-10C": "A-10C Warthog",
+    "A-10C_2": "A-10C II Warthog",
+    "A-10A": "A-10A Warthog",
+    "M-2000C": "Mirage 2000C",
+    "Mirage-F1CE": "Mirage F1CE",
+    "MiG-29A": "MiG-29A Fulcrum",
+    "MiG-21Bis": "MiG-21bis",
+    "Su-25T": "Su-25T Frogfoot",
+    "Su-27": "Su-27 Flanker",
+    "Su-33": "Su-33 Flanker-D",
+    "JF-17": "JF-17 Thunder",
+    "Ka-50": "Ka-50 Black Shark",
+    "Ka-50_3": "Ka-50 III Black Shark",
+    "AH-64D_BLK_II": "AH-64D Apache",
+    "UH-1H": "UH-1H Huey",
+    "Mi-8MT": "Mi-8MTV2",
+    "Mi-24P": "Mi-24P Hind",
+    "SA342M": "SA342M Gazelle",
+    "CH-47Fbl1": "CH-47F Chinook",
+    "OH58D": "OH-58D Kiowa",
+    "AJS37": "AJS 37 Viggen",
+    "C-101EB": "C-101EB Aviojet",
+    "L-39ZA": "L-39ZA Albatros",
+    "Bf-109K-4": "Bf 109 K-4",
+    "FW-190D9": "Fw 190 D-9",
+    "FW-190A8": "Fw 190 A-8",
+    "SpitfireLFMkIX": "Spitfire LF Mk IX",
+    "P-51D": "P-51D Mustang",
+    "P-47D-30": "P-47D Thunderbolt",
+    "MosquitoFBMkVI": "Mosquito FB Mk VI",
+    "I-16": "Polikarpov I-16",
+    "Yak-52": "Yak-52",
+    "TF-51D": "TF-51D Mustang",
+    "F-86F Sabre": "F-86F Sabre",
+    "F-4E-45MC": "F-4E Phantom II",
+    "F-5E-3": "F-5E Tiger II",
+    "MB-339A": "MB-339A",
+}
 PLAYER_SKILLS = ("Player", "Client")
 
 # Group tasks that indicate a support asset worth listing. Deliberately narrow:
@@ -184,7 +234,10 @@ class DcsMission:
             "sunrise": "",
             "sunset": "",
             "target_icao": "",
-            "aircraft_type": str(unit.get("type", "")),
+            "aircraft_type": AIRCRAFT_NAMES.get(
+                str(unit.get("type", "")), str(unit.get("type", ""))
+            ),
+            "aircraft_id": str(unit.get("type", "")),
             "theatre": self.theatre,
             "mission_date": date_text,
             "start_time": _fmt_clock(start),

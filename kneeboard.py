@@ -66,6 +66,13 @@ def api_state():
     return jsonify(payload)
 
 
+@app.route("/api/sims")
+def api_sims():
+    """Status of every sim, for the landing page. Stats only, no mission parsing."""
+    assert state is not None
+    return jsonify({"sims": state.sims_overview()})
+
+
 @app.route("/api/token")
 def api_token():
     """Cheap freshness probe -- the page polls this and reloads on change."""

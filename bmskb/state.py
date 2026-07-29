@@ -196,6 +196,83 @@ class KneeboardState:
                 found["il2"] = (None, _mtime_of(sortie))
         return found
 
+    def sims_overview(self) -> list[dict]:
+        """Per-sim status for the landing page.
+
+        Deliberately cheap: file stats and names only, no mission parsing, so
+        opening the front page never pays for building three boards.
+        """
+        candidates = self._candidates()
+        preference = self.settings.get("sim", "auto")
+        chosen, _ = self.choose_sim()
+        out = []
+
+        # -- BMS
+        bms_at = self._bms_mtime()
+        out.append(
+            {
+                "key": "bms",
+                "label": "Falcon BMS",
+                "title": f"BMS {self.install.version}" if self.install else "Falcon BMS",
+                "found": bool(self.install),
+                "ready": bool(bms_at),
+                "source": "briefing.txt" if bms_at else "",
+                "updated": _stamp_text(bms_at),
+                "detail": (self.install.theater if self.install else "")
+                or ("" if self.install else "not installed"),
+                "hint": "" if bms_at else "Commit to a mission in BMS to generate a briefing.",
+            }
+        )
+
+        # -- DCS
+        dcs_path, dcs_at = self._dcs_mission_path()
+        out.append(
+            {
+                "key": "dcs",
+                "label": "DCS World",
+                "title": f"DCS {self.dcs.version}".strip() if self.dcs else "DCS World",
+                "found": bool(self.dcs),
+                "ready": bool(dcs_path),
+                "source": dcs_path.name if dcs_path else "",
+                "updated": _stamp_text(dcs_at),
+                "detail": f"{len(self.dcs.missions())} missions" if self.dcs else "not installed",
+                "hint": "" if dcs_path else "No .miz found under Saved Games\\DCS\\Missions.",
+            }
+        )
+
+        # -- IL-2
+        il2_path, il2_at = self._il2_mission_path()
+        sortie = self.il2.latest_sortie() if self.il2 else None
+        details = []
+        if self.il2:
+            if sortie:
+                details.append(f"{len(self.il2.sorties())} sorties logged")
+            if not self.il2.text_log_enabled:
+                details.append("mission_text_log off")
+        out.append(
+            {
+                "key": "il2",
+                "label": "IL-2 Great Battles",
+                "title": "IL-2 Great Battles",
+                "found": bool(self.il2),
+                "ready": bool(il2_path or sortie),
+                "source": il2_path.name if il2_path else (sortie.name if sortie else ""),
+                "updated": _stamp_text(il2_at or _mtime_of(sortie) if sortie else il2_at),
+                "detail": ", ".join(details) if details else ("" if self.il2 else "not installed"),
+                "hint": ""
+                if (il2_path or sortie)
+                else "Fly a career sortie to generate a mission.",
+            }
+        )
+
+        for entry in out:
+            entry["active"] = entry["key"] == chosen
+            entry["pinned"] = entry["key"] == preference
+            entry["newest"] = bool(
+                candidates and entry["key"] == max(candidates, key=lambda k: candidates[k][1])
+            )
+        return out
+
     def choose_sim(self) -> tuple[str, object]:
         """Return the sim to display and, for DCS and IL-2, the mission to read.
 
@@ -568,6 +645,12 @@ class KneeboardState:
                     }
                 )
         return warnings
+
+
+def _stamp_text(when: float) -> str:
+    if not when:
+        return ""
+    return datetime.fromtimestamp(when).strftime("%Y-%m-%d %H:%M")
 
 
 def _mtime_of(path) -> float:

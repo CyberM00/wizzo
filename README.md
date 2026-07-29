@@ -10,11 +10,17 @@ phone over your LAN.
 
 ## Which sim it shows
 
-The board reads every install it finds and, by default, shows whichever wrote a
-mission most recently — BMS's `briefing.txt`, the newest `.miz` under
-`Saved Games\DCS\Missions`, or IL-2's `data\Missions\_gen.Mission`. The button
-under the nav shows what is active (`BMS (auto)`) and cycles through
-auto → BMS → DCS → IL-2 if you want to pin it.
+The board opens on a **sim chooser**: one card per sim showing whether it was
+found, which mission it would read, when that was written, and which is newest.
+Click one and it pins the board to that sim and goes straight to the brief. `H`
+returns to the chooser at any time; the board pages keep their `1`–`8` shortcuts.
+
+The chooser reads file stats only, never parsing a mission, so opening it is
+instant regardless of how many sims you have installed.
+
+If you would rather the board follow whichever sim wrote a mission most recently,
+press the button below the nav until it reads `(auto)`. It cycles
+auto → BMS → DCS → IL-2.
 
 The three sims expose very different amounts of data, so what each page shows
 differs. See [DCS support](#dcs-support) and [IL-2 support](#il-2-support) for
@@ -78,6 +84,7 @@ If an update changes `requirements.txt`, the console says so and you should run
 
 | Page | Contents |
 |---|---|
+| **Home** | The sim chooser — status, current mission and timestamp for each sim |
 | **Brief** | Flight, package, time on target, target, situation, package elements, roster, ROE, emergency procedures |
 | **Loadout** | Your stores with weights, missile ranges and expandable employment detail; laser-code panel |
 | **Steer** | Full steerpoint table — time, distance, heading, CAS, altitude, action, formation |
@@ -87,7 +94,8 @@ If an update changes `requirements.txt`, the console says so and you should run
 | **Charts** | Approach plates auto-selected for your departure, recovery, alternate and target fields; all 89 KTO airfields browsable |
 | **Maps** | Theatre maps with drag-to-pan and scroll-to-zoom |
 
-Keys `1`–`8` switch pages. `R` forces a reload. `T` switches theme.
+Keys `1`–`8` switch pages, `H` opens the sim chooser. `R` forces a reload. `T`
+switches theme.
 
 On a portrait screen the nav moves to the top so the full width goes to content,
 the stat grids drop to two columns, and the chart viewer takes most of the

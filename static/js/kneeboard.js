@@ -7,6 +7,7 @@
 "use strict";
 
 const TABS = [
+  { id: "home", label: "Home" },
   { id: "brief", label: "Brief" },
   { id: "loadout", label: "Loadout" },
   { id: "steer", label: "Steer" },
@@ -18,7 +19,11 @@ const TABS = [
 ];
 
 let DATA = null;
-let activeTab = localStorage.getItem("kb.tab") || "brief";
+// The board opens on the sim chooser, so a load never lands you in whichever sim
+// happened to be newest. Polling calls load() rather than reloading the page, so
+// this cannot pull you back to Home mid-flight.
+let activeTab = "home";
+let SIMS = null;
 let lastToken = null;
 const viewerChoice = {};
 
@@ -128,6 +133,84 @@ const pageHead = (title, note = "") =>
   `<div class="page-head"><h2>${esc(title)}</h2>${
     note ? `<span class="note">${esc(note)}</span>` : ""
   }</div>`;
+
+/* ---------------------------------------------------------------- home */
+
+/** The landing page: pick which sim to read. */
+function renderHome() {
+  if (!SIMS) return pageHead("Choose a sim") + '<div class="empty">Checking your installs&hellip;</div>';
+
+  const cards = SIMS.map((s) => {
+    const state = !s.found
+      ? '<span class="tag red">not found</span>'
+      : !s.ready
+      ? '<span class="tag amber">no mission</span>'
+      : '<span class="tag green">ready</span>';
+    const newest = s.ready && s.newest ? ' <span class="tag cyan">newest</span>' : "";
+
+    const lines = [
+      s.source ? ["Mission", s.source] : null,
+      s.updated ? ["Written", s.updated] : null,
+      s.detail ? ["", s.detail] : null,
+    ].filter(Boolean);
+
+    const body =
+      `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-family:var(--mono);font-size:18px;color:var(--amber)">${esc(s.title)}</span>
+        ${state}${newest}
+      </div>` +
+      (lines.length
+        ? `<dl class="kv">${lines
+            .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`)
+            .join("")}</dl>`
+        : "") +
+      (s.hint ? `<div class="hint" style="margin-top:9px">${esc(s.hint)}</div>` : "") +
+      `<div style="margin-top:12px">
+        <button class="link-btn sim-enter" data-sim="${esc(s.key)}" ${s.found ? "" : "disabled"}
+                style="min-height:38px;padding:8px 16px;${
+                  s.ready ? "border-color:var(--amber);color:var(--amber)" : ""
+                }">
+          ${s.ready ? "Open" : "Open anyway"} ${esc(s.label)}
+        </button>
+      </div>`;
+
+    return card("", body);
+  }).join("");
+
+  const anyReady = SIMS.some((s) => s.ready);
+  return (
+    pageHead("Choose a sim", anyReady ? "" : "no missions found in any sim yet") +
+    `<div class="grid c3">${cards}</div>` +
+    `<div class="grid" style="margin-top:12px">${card(
+      "",
+      '<div class="hint">Pinning a sim here keeps the board on it. To follow whichever sim ' +
+        "wrote a mission most recently instead, use the button below the nav until it reads " +
+        "<b>(auto)</b>.</div>"
+    )}</div>`
+  );
+}
+
+/** Pin a sim and go straight to its brief. */
+async function enterSim(key) {
+  try {
+    await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sim: key }),
+    });
+  } catch (e) {}
+  await load(true);
+  setTab("brief");
+}
+
+async function loadSims() {
+  try {
+    const res = await fetch("/api/sims");
+    SIMS = (await res.json()).sims || [];
+  } catch (e) {
+    SIMS = [];
+  }
+}
 
 /* --------------------------------------------------------------- brief */
 
@@ -1210,6 +1293,7 @@ function wirePanZoom(root = document) {
 /* ---------------------------------------------------------------- shell */
 
 const RENDERERS = {
+  home: renderHome,
   brief: renderBrief,
   loadout: renderLoadout,
   steer: renderSteer,
@@ -1220,13 +1304,18 @@ const RENDERERS = {
   maps: renderMaps,
 };
 
+// The board pages keep their 1-8 shortcuts; Home sits outside that sequence on H
+// so adding it did not renumber everything.
+const PAGE_TABS = TABS.filter((t) => t.id !== "home");
+
 function renderNav() {
-  document.getElementById("nav").innerHTML = TABS.map(
-    (t, i) =>
-      `<button data-tab="${t.id}" class="${t.id === activeTab ? "active" : ""}">${esc(
-        t.label
-      )}<span class="key">${i + 1}</span></button>`
-  ).join("");
+  document.getElementById("nav").innerHTML = TABS.map((t) => {
+    const index = PAGE_TABS.indexOf(t);
+    const key = t.id === "home" ? "H" : String(index + 1);
+    return `<button data-tab="${t.id}" class="${t.id === activeTab ? "active" : ""}">${esc(
+      t.label
+    )}<span class="key">${key}</span></button>`;
+  }).join("");
   document.querySelectorAll("#nav button").forEach((btn) =>
     btn.addEventListener("click", () => setTab(btn.dataset.tab))
   );
@@ -1238,17 +1327,35 @@ function setTab(id) {
   localStorage.setItem("kb.tab", id);
   renderNav();
   renderMain();
+  // Refresh the chooser's status each time it is opened, so it never shows a
+  // stale "no mission" after you have flown one.
+  if (id === "home") loadSims().then(renderMain);
 }
 
 function renderMain() {
   const main = document.getElementById("main");
+
+  // The chooser must work even when the selected sim has nothing to show --
+  // that is exactly when you need to switch to another one.
+  if (activeTab === "home") {
+    main.innerHTML = renderHome();
+    main.scrollTop = 0;
+    main.querySelectorAll(".sim-enter").forEach((btn) =>
+      btn.addEventListener("click", () => enterSim(btn.dataset.sim))
+    );
+    return;
+  }
 
   if (!DATA) {
     main.innerHTML = '<div class="empty">Loading&hellip;</div>';
     return;
   }
   if (!DATA.ok) {
-    main.innerHTML = pageHead("Setup Required") + banners(DATA.warnings);
+    main.innerHTML =
+      pageHead("Setup Required") +
+      banners(DATA.warnings) +
+      '<div class="row-flow" style="margin-top:10px"><button class="link-btn" ' +
+      'onclick="setTab(\'home\')">Back to sim chooser</button></div>';
     return;
   }
 
@@ -1438,7 +1545,8 @@ async function pollFreshness() {
 document.addEventListener("keydown", (e) => {
   if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
   const index = parseInt(e.key, 10);
-  if (index >= 1 && index <= TABS.length) setTab(TABS[index - 1].id);
+  if (index >= 1 && index <= PAGE_TABS.length) setTab(PAGE_TABS[index - 1].id);
+  if (e.key === "h" || e.key === "H") setTab("home");
   if (e.key === "r" || e.key === "R") load(true);
   if (e.key === "t" || e.key === "T") applyTheme(themeNow() === "day" ? "night" : "day");
 });
@@ -1450,6 +1558,7 @@ document.getElementById("sim-btn").addEventListener("click", cycleSim);
 
 applyTheme(themeNow());
 renderNav();
+loadSims().then(renderMain);
 load().catch(() => {
   document.getElementById("main").innerHTML =
     '<div class="empty">Could not reach the kneeboard server.</div>';

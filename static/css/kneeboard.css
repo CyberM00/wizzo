@@ -459,6 +459,12 @@ select.picker {
   font-family: var(--sans);
 }
 .link-btn:hover { color: var(--amber); border-color: var(--amber); }
+.link-btn:disabled {
+  color: var(--text-faint);
+  border-color: var(--border);
+  cursor: not-allowed;
+}
+.link-btn:disabled:hover { color: var(--text-faint); border-color: var(--border); }
 
 /* ------------------------------------------------- sidebar controls */
 
