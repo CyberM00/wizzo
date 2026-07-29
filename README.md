@@ -1,21 +1,24 @@
 # BMS Kneeboard
 
-A second-monitor kneeboard for **Falcon BMS** and **DCS World**. It reads what
-the sim already writes, pulls in the matching charts, and turns your loadout into
-an employment reference — automatically, every time you take a new mission.
+A second-monitor kneeboard for **Falcon BMS**, **DCS World** and **IL-2 Sturmovik:
+Great Battles**. It reads what the sim already writes, pulls in the matching
+charts, and turns your loadout into an employment reference — automatically, every
+time you take a new mission.
 
 Runs as a small local web server, so the same board also opens on a tablet or
 phone over your LAN.
 
 ## Which sim it shows
 
-The board reads both installs and, by default, shows whichever wrote a mission
-most recently — BMS's `briefing.txt` or the newest `.miz` under
-`Saved Games\DCS\Missions`. The button under the nav shows what is active
-(`BMS (auto)`) and cycles through auto → BMS → DCS if you want to pin it.
+The board reads every install it finds and, by default, shows whichever wrote a
+mission most recently — BMS's `briefing.txt`, the newest `.miz` under
+`Saved Games\DCS\Missions`, or IL-2's `data\Missions\_gen.Mission`. The button
+under the nav shows what is active (`BMS (auto)`) and cycles through
+auto → BMS → DCS → IL-2 if you want to pin it.
 
-The two sims expose very different amounts of data, so what each page shows
-differs. See [DCS support](#dcs-support) for exactly what carries over.
+The three sims expose very different amounts of data, so what each page shows
+differs. See [DCS support](#dcs-support) and [IL-2 support](#il-2-support) for
+exactly what carries over.
 
 ## Running it
 
@@ -38,7 +41,8 @@ it explicitly:
 python kneeboard.py --bms-path "D:\Falcon BMS 4.38"
 ```
 
-DCS is found the same way, and can be pointed at with `--dcs-path`.
+DCS and IL-2 are found the same way, and can be pointed at with `--dcs-path` and
+`--il2-path`.
 
 Other options: `--port` (default 5000), `--host`, `--no-browser`, `--no-update`,
 `--check-update` (report whether an update is waiting, then exit).
@@ -212,6 +216,90 @@ explicit rather than assumed.
 reliably describe what a generated group does — a BARCAP in the test mission was
 tagged `Transport`. Labelling the rest would be guesswork.
 
+## IL-2 support
+
+IL-2 exports nothing and has no telemetry of any kind — no shared memory, no UDP
+export. Everything comes from files it leaves on disk.
+
+Career mode is fully supported. Scripted DLC campaigns are partially supported;
+see below.
+
+| Page | What IL-2 gives you |
+|---|---|
+| **Brief** | Mission title, flight callsign ("Finch 4"), airframe, date, takeoff time, theatre, the complete mission briefing, your flight's pilot roster, and spawn fuel and ammunition |
+| **Loadout** | Every store with the game's own name, and a planned-versus-as-flown comparison |
+| **Steer** | The route: waypoint names, altitudes, commanded speeds, formations, plus computed leg distance and bearing |
+| **Comms** | Callsigns only — see below |
+| **Weather** | Five wind layers, cloud base and thickness, cloud preset, temperature, pressure, haze, turbulence, sea state. The richest weather of the three sims |
+| **Charts** | Taxi diagrams for your departure and recovery fields, drawn from the mission's own coordinates |
+| **Threats** | Nothing — see below |
+| **Maps** | Nothing — IL-2 keeps terrain as packed data, not images |
+
+### Where the loadout comes from
+
+Unusually, IL-2's own weapon tables are readable, so store names come from the
+game itself rather than a curated file. The mission's `PayloadId` is an index into
+the aircraft's ammunition list inside `Scripts.gtp`, and the weapon codes in that
+list resolve against the name table in `Swf.gtp`. Both are read directly and cached
+in a gitignored `il2_name_cache.json`, keyed on the archives' size and modification
+time so a game patch rebuilds it automatically. The build takes about 0.15 seconds
+and reads roughly 8 MB of the 1.6 GB involved.
+
+Coverage is 99.3% of every loadout string in the game; three drop-tank codes have
+no entry in IL-2's own table and are shown as raw codes.
+
+### Planned versus as flown
+
+**IL-2 never writes your chosen loadout back to the mission file.** One career
+mission here was reused across five sorties with different loadouts each time. The
+mission file therefore holds only what the generator planned.
+
+What you actually took off with is recorded in `data\missionReport(...)[0].txt`,
+which IL-2 writes when a mission starts. The board reads it, checks it really does
+belong to the mission on disk (four tests: the mission it names, its date, its
+time, and that it is not older than the mission file), and says which source it is
+showing. When they disagree, it says so and shows what you flew.
+
+This depends on `mission_text_log = 1` in `data\startup.cfg`, which is on by
+default. When it is off the board says so rather than presenting the planned
+loadout as fact.
+
+### What IL-2 deliberately does not show, and why
+
+**No weapon modifications or gun round counts.** The mission file writes the
+modification bitmask as base-2 digits and the log writes the same value in
+decimal, but which end the digit string starts from is not confirmed — and bit 0
+is set either way, so a wrong reading would look entirely plausible while
+mislabelling every modification. Likewise, a payload label like `SHKAS-AP-1500`
+carries a number, but whether it is per-gun or a total for the pair is not
+established. Both are extracted and cached, so surfacing them later is a display
+change; neither is displayed on a guess.
+
+**Wind direction is stated without a convention.** The mission file gives a
+direction per altitude layer, but whether it is the direction the wind comes from
+or blows toward is not confirmed, so it is shown as the file states it.
+
+**No frequencies.** IL-2 aircraft of this era have no tunable radio and the mission
+files carry none. Callsigns are resolved against the game's own callsign table;
+the preset, IFF and Link 16 panels are not rendered at all.
+
+**No threat picture.** The mission file places every unit on the map but marks none
+as a threat to your route.
+
+**No estimated times.** IL-2 records no ETA at any waypoint, so the time column is
+blank rather than derived from distance and speed.
+
+**Scripted campaigns are partial.** DLC campaign missions are compiled into
+`.cmpbin` inside `Campaigns.gtp` — a binary this cannot read — so there is no
+route, weather or planned loadout for them. What *is* readable beside each mission
+is its briefing text and its briefing map image, and the sortie log still gives the
+as-flown loadout, so the board shows those and says what is missing. This path is
+built from the archive's structure but has not been exercised against a real
+campaign sortie.
+
+**PWCG is out of scope.** Missions under `data\Missions\PWCG` are ignored so they
+cannot be picked up as the current mission.
+
 ## Layout
 
 ```
@@ -233,6 +321,17 @@ bmskb/
     weapons.py            CLSID lookup against the curated library
     source.py             DCS payload assembly
     data/dcs_stores.json  curated F/A-18C, A-10C and AV-8B store reference
+  il2/
+    install.py            IL-2 discovery, mission and sortie-log listing
+    gtp.py                reader for IL-2's packed .gtp archives
+    missionfile.py        targeted scanner for the mission text format
+    localization.py       UTF-16 text files and the briefing-to-prose converter
+    logs.py               sortie log reader and mission correlation
+    reference.py          callsign and country tables from data\GUI
+    extract.py            weapon-name extraction from the game's archives, cached
+    weapons.py            payload lookup with honest unknowns
+    mission.py            mission reader, route geometry, unit conversion
+    source.py             IL-2 payload assembly, career and campaign
 templates/index.html      page shell
 static/css, static/js     styling and renderer
 ```

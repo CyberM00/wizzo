@@ -19,6 +19,12 @@ from .dcs.install import DcsInstall
 from .dcs.mission import MissionError
 from .dcs.weapons import DcsWeaponLibrary
 from .dtc import parse_dtc_comm
+from .il2 import logs as il2_logs
+from .il2 import source as il2_source
+from .il2.install import Il2Install
+from .il2.mission import MissionError as Il2MissionError
+from .il2.reference import Il2Reference
+from .il2.weapons import Il2WeaponLibrary
 from .install import BmsInstall
 from .weapons import DATA_DIR, WeaponLibrary
 
@@ -34,12 +40,12 @@ DEFAULT_SETTINGS = {
     "laser_code": "1688",
     "wingman_laser_code": "",
     "notes": "",
-    # "auto" follows whichever sim wrote a mission most recently; "bms" or
-    # "dcs" pin the board to one.
+    # "auto" follows whichever sim wrote a mission most recently; naming one pins
+    # the board to it.
     "sim": "auto",
 }
 
-VALID_SIMS = ("auto", "bms", "dcs")
+VALID_SIMS = ("auto", "bms", "dcs", "il2")
 
 
 def _parse_timestamp(text: str) -> datetime | None:
@@ -77,20 +83,35 @@ def validate_laser_code(code: str) -> tuple[bool, str]:
 class KneeboardState:
     """Caches the parsed kneeboard and rebuilds it when briefing.txt changes."""
 
-    def __init__(self, install: BmsInstall | None, dcs: DcsInstall | None = None):
+    def __init__(
+        self,
+        install: BmsInstall | None,
+        dcs: DcsInstall | None = None,
+        il2: Il2Install | None = None,
+    ):
         self.install = install
         self.dcs = dcs
+        self.il2 = il2
         self.lock = threading.Lock()
         self.payload: dict | None = None
         self.signature: tuple | None = None
         self.weapons = WeaponLibrary(install.wcd_file if install else None)
         self.dcs_weapons = DcsWeaponLibrary()
+        # IL-2's tables come out of the game's packed archives. The library loads
+        # them lazily on first use, so a user who never opens the IL-2 board pays
+        # nothing and a slow disk cannot delay the server starting.
+        self.il2_weapons = Il2WeaponLibrary(
+            il2.base if il2 else None, il2.language() if il2 else "eng"
+        )
+        self.il2_reference = Il2Reference(il2, il2.language() if il2 else "eng")
         self.charts = ChartLibrary(
             install.charts_dir if install else None,
             install.maps_dir if install else None,
         )
         self.settings = self._load_settings()
-        # Kept so the mission archive can be served without reopening it.
+        # Kept so the mission archive can be served without reopening it. IL-2
+        # needs no equivalent: its taxi charts are drawn inline from coordinates,
+        # so nothing has to be served out of a mission file later.
         self.dcs_mission = None
 
     # -- settings --------------------------------------------------------
@@ -138,10 +159,11 @@ class KneeboardState:
         except OSError:
             return 0.0
 
-    def _dcs_mission_path(self):
-        if not self.dcs:
+    @staticmethod
+    def _latest_mission(install):
+        if not install:
             return None, 0.0
-        latest = self.dcs.latest_mission()
+        latest = install.latest_mission()
         if not latest:
             return None, 0.0
         try:
@@ -149,30 +171,75 @@ class KneeboardState:
         except OSError:
             return latest, 0.0
 
-    def choose_sim(self) -> tuple[str, object]:
-        """Return the sim to display and, for DCS, the mission to read.
+    def _dcs_mission_path(self):
+        return self._latest_mission(self.dcs)
 
-        In "auto" the more recently written mission wins, which mirrors how the
-        board already follows briefing.txt without being told.
+    def _il2_mission_path(self):
+        return self._latest_mission(self.il2)
+
+    def _candidates(self) -> dict[str, tuple[object, float]]:
+        """Each sim that has something to show, with the mission and its age."""
+        found: dict[str, tuple[object, float]] = {}
+        bms_at = self._bms_mtime()
+        if self.install and bms_at:
+            found["bms"] = (None, bms_at)
+        for name, getter in (("dcs", self._dcs_mission_path), ("il2", self._il2_mission_path)):
+            path, at = getter()
+            if path:
+                found[name] = (path, at)
+
+        # A player who only flies scripted campaigns has no loose mission file at
+        # all -- the sortie log is the only handle on what they flew.
+        if "il2" not in found and self.il2:
+            sortie = self.il2.latest_sortie()
+            if sortie:
+                found["il2"] = (None, _mtime_of(sortie))
+        return found
+
+    def choose_sim(self) -> tuple[str, object]:
+        """Return the sim to display and, for DCS and IL-2, the mission to read.
+
+        In "auto" the most recently written mission wins, which mirrors how the
+        board already follows briefing.txt without being told. BMS returns ``None``
+        for the mission because its source is a fixed path.
         """
         preference = self.settings.get("sim", "auto")
-        bms_at = self._bms_mtime()
-        dcs_path, dcs_at = self._dcs_mission_path()
+        candidates = self._candidates()
 
-        if preference == "bms":
-            return "bms", None
-        if preference == "dcs":
-            return "dcs", dcs_path
-        if dcs_path and dcs_at > bms_at:
-            return "dcs", dcs_path
-        if bms_at:
-            return "bms", None
-        return ("dcs", dcs_path) if dcs_path else ("bms", None)
+        if preference in candidates:
+            return preference, candidates[preference][0]
+        # A pinned sim that has nothing to show still wins: silently showing a
+        # different sim would be more confusing than an empty board.
+        if preference in ("bms", "dcs", "il2"):
+            return preference, None
+
+        if candidates:
+            name = max(candidates, key=lambda key: candidates[key][1])
+            return name, candidates[name][0]
+        return "bms", None
 
     # -- freshness -------------------------------------------------------
 
     def _current_signature(self) -> tuple:
         sim, mission = self.choose_sim()
+
+        if sim == "il2":
+            if not mission:
+                return ("il2", "no-mission")
+            # IL-2 has two inputs that change independently: the mission file is
+            # written when a sortie is generated, and the sortie log appears
+            # seconds later when you click Fly -- which is the moment the as-flown
+            # loadout becomes knowable. Both must be in the signature or the board
+            # never upgrades "planned" to "as flown".
+            sortie = self.il2.latest_sortie() if self.il2 else None
+            return (
+                "il2",
+                str(mission),
+                _stat_key(mission),
+                str(sortie) if sortie else "",
+                _stat_key(sortie) if sortie else 0,
+            )
+
         if sim == "dcs":
             if not mission:
                 return ("dcs", "no-mission")
@@ -212,12 +279,32 @@ class KneeboardState:
             out.append("bms")
         if self.dcs and self.dcs.latest_mission():
             out.append("dcs")
+        if self.il2 and (self.il2.latest_mission() or self.il2.latest_sortie()):
+            out.append("il2")
         return out
 
     def _build(self) -> dict:
         sim, mission_path = self.choose_sim()
-        if sim == "dcs" and mission_path is not None:
-            payload = self._build_dcs(mission_path)
+        builders = {"dcs": self._build_dcs, "il2": self._build_il2}
+        builder = builders.get(sim)
+        # IL-2 is called even without a loose mission: a scripted campaign has no
+        # mission file on disk and is resolved through the sortie log instead.
+        if builder is not None and (mission_path is not None or sim == "il2"):
+            payload = builder(mission_path)
+        elif builder is not None:
+            payload = {
+                "sim": sim,
+                "ok": False,
+                "install": None,
+                "warnings": [
+                    {
+                        "level": "error",
+                        "text": f"The board is pinned to {sim.upper()} but no mission was "
+                        "found for it. Fly a mission, or switch sim with the button "
+                        "under the nav.",
+                    }
+                ],
+            }
         else:
             payload = self._build_bms()
 
@@ -246,6 +333,50 @@ class KneeboardState:
         payload["laser"] = self._laser_block(payload.get("loadout", {}), sim="dcs")
         for text in self.dcs_weapons.errors:
             payload["warnings"].append({"level": "warn", "text": text})
+        return payload
+
+    def _il2_campaign_log(self, mission_path):
+        """A sortie log naming a mission that is not the loose file on disk.
+
+        That means a scripted campaign: its mission is compiled inside
+        Campaigns.gtp, so the log is the only handle on it.
+        """
+        if not self.il2:
+            return None
+        latest = self.il2.latest_sortie()
+        if latest is None:
+            return None
+        log = il2_logs.SortieLog(latest)
+        if not log.ok or not log.mission_file:
+            return None
+        named = Path(log.mission_file.replace("\\", "/")).stem.casefold()
+        if mission_path is not None and named == Path(mission_path).stem.casefold():
+            return None
+        if "campaign" not in log.mission_file.replace("\\", "/").lower():
+            return None
+        return log
+
+    def _build_il2(self, mission_path) -> dict:
+        campaign_log = self._il2_campaign_log(mission_path)
+        if campaign_log is not None:
+            payload = il2_source.build_campaign(
+                self.il2, campaign_log, self.il2_weapons, self.il2_reference
+            )
+            payload["laser"] = self._laser_block(payload.get("loadout", {}), sim="il2")
+            return payload
+
+        try:
+            payload = il2_source.build(
+                self.il2, mission_path, self.il2_weapons, self.il2_reference
+            )
+        except Il2MissionError as exc:
+            return {
+                "sim": "il2",
+                "ok": False,
+                "install": None,
+                "warnings": [{"level": "error", "text": str(exc)}],
+            }
+        payload["laser"] = self._laser_block(payload.get("loadout", {}), sim="il2")
         return payload
 
     def _build_bms(self) -> dict:
@@ -367,6 +498,18 @@ class KneeboardState:
         }
 
     def _laser_block(self, loadout: dict, sim: str = "bms") -> dict:
+        if sim == "il2":
+            # No laser designators existed in 1943.
+            return {
+                "code": "",
+                "wingman_code": "",
+                "notes": "",
+                "needed": False,
+                "player_laser_stores": [],
+                "reference": {},
+                "source_note": "",
+                "not_applicable": True,
+            }
         needed = any(f.get("needs_laser_code") for f in loadout.get("flights", []))
         stores = sorted(
             {
@@ -425,6 +568,22 @@ class KneeboardState:
                     }
                 )
         return warnings
+
+
+def _mtime_of(path) -> float:
+    try:
+        return path.stat().st_mtime
+    except (OSError, AttributeError):
+        return 0.0
+
+
+def _stat_key(path) -> int:
+    """A cheap change token for one file: mtime and size combined."""
+    try:
+        stat = path.stat()
+    except (OSError, AttributeError):
+        return 0
+    return int(stat.st_mtime) * 1000003 + stat.st_size
 
 
 def _humanise(seconds: float) -> str:

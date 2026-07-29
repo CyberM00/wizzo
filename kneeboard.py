@@ -23,6 +23,9 @@ from flask import Flask, abort, jsonify, render_template, request, send_file
 
 from bmskb import __version__
 from bmskb.dcs.install import DcsInstall
+from bmskb.il2.gtp import GtpError
+from bmskb.il2.gtp import open_archive as il2_open_archive
+from bmskb.il2.install import Il2Install
 from bmskb.install import BmsInstall
 from bmskb.selfupdate import REEXEC_GUARD, check_and_update, describe
 from bmskb.state import KneeboardState, validate_laser_code
@@ -117,6 +120,27 @@ def mission_page(entry: str):
     return send_file(io.BytesIO(data), mimetype=guessed, download_name=Path(entry).name)
 
 
+@app.route("/il2page/<path:entry>")
+def il2_campaign_page(entry: str):
+    """Serve a scripted campaign's briefing map out of Campaigns.gtp.
+
+    Restricted to the entries the current payload actually listed, so a crafted
+    path cannot pull other members out of the archive.
+    """
+    assert state is not None
+    payload = state.get()
+    allowed = {page["entry"] for page in (payload.get("charts") or {}).get("pages", [])}
+    if entry not in allowed or not state.il2:
+        abort(403)
+    try:
+        with il2_open_archive(state.il2.campaigns_archive) as archive:
+            data = archive.read(entry)
+    except (GtpError, KeyError, OSError):
+        abort(404)
+    guessed = mimetypes.guess_type(entry)[0] or "application/octet-stream"
+    return send_file(io.BytesIO(data), mimetype=guessed, download_name=Path(entry).name)
+
+
 def _lan_address() -> str:
     """Best-effort LAN IP, so the board can be opened on a tablet."""
     probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -137,6 +161,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=5000, help="port (default: 5000)")
     parser.add_argument("--bms-path", default=None, help="override the BMS install path")
     parser.add_argument("--dcs-path", default=None, help="override the DCS install path")
+    parser.add_argument("--il2-path", default=None, help="override the IL-2 install path")
     parser.add_argument("--no-browser", action="store_true", help="do not open a browser")
     parser.add_argument(
         "--no-update", action="store_true", help="skip the check for a newer version"
@@ -179,7 +204,8 @@ def main() -> int:
 
     install = BmsInstall.discover(args.bms_path)
     dcs = DcsInstall.discover(args.dcs_path)
-    state = KneeboardState(install, dcs)
+    il2 = Il2Install.discover(args.il2_path)
+    state = KneeboardState(install, dcs, il2)
 
     if install:
         print(f"  BMS {install.version} at {install.base}")
@@ -209,11 +235,31 @@ def main() -> int:
     else:
         print("  no DCS installation found (set DCS_PATH or pass --dcs-path).")
 
+    if il2:
+        info = il2.describe()
+        print(f"  IL-2 at {info['base']}")
+        if info["latest_mission_name"]:
+            print(
+                f"  missions: {info['mission_count']} found, newest "
+                f"{info['latest_mission_name']}  (language {info['language']})"
+            )
+        else:
+            print("  note:    no mission found under data\\Missions -- fly a career sortie")
+        if info["sortie_count"]:
+            print(f"  sorties: {info['sortie_count']} logged, newest {info['latest_sortie_name']}")
+        if not info["text_log_enabled"]:
+            print(
+                "  note:    mission_text_log is 0 in data\\startup.cfg, so the as-flown "
+                "loadout cannot be read"
+            )
+    else:
+        print("  no IL-2 installation found (set IL2_PATH or pass --il2-path).")
+
     active, mission = state.choose_sim()
     print(f"  showing: {active.upper()}" + (f" -- {mission.name}" if mission else ""))
 
-    if not install and not dcs:
-        print("  WARNING: neither sim was found; the board will have nothing to show.")
+    if not install and not dcs and not il2:
+        print("  WARNING: no sim was found; the board will have nothing to show.")
 
     url = f"http://localhost:{args.port}"
     print(f"\n  Open {url}")

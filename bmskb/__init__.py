@@ -1,3 +1,3 @@
-"""Second-monitor kneeboard for Falcon BMS and DCS World."""
+"""Second-monitor kneeboard for Falcon BMS, DCS World and IL-2 Great Battles."""
 
-__version__ = "1.4.0"
+__version__ = "1.5.0"

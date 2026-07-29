@@ -131,7 +131,11 @@ const pageHead = (title, note = "") =>
 
 /* --------------------------------------------------------------- brief */
 
-const isDcs = (d) => (d || DATA || {}).sim === "dcs";
+const SIM_LABELS = { bms: "BMS", dcs: "DCS", il2: "IL-2" };
+
+const simIs = (name, d) => (d || DATA || {}).sim === name;
+const isDcs = (d) => simIs("dcs", d);
+const isIl2 = (d) => simIs("il2", d);
 
 function renderBrief(d) {
   const b = d.briefing || {};
@@ -155,6 +159,43 @@ function renderBrief(d) {
           stat("Target", o.target_icao || "—", o.target_area || ""),
         ]
   ).join("");
+
+  if (isIl2(d)) {
+    const c = b.consumables || {};
+    const r = c.rounds || {};
+    const roster = b.roster || { headers: [], rows: [] };
+    return (
+      pageHead("Mission Brief", o.mission || "") +
+      banners(d.warnings) +
+      `<div class="grid c4">
+        ${stat("Flight", o.flight, o.pilot || "", "amber")}
+        ${stat("Aircraft", o.aircraft_type, o.country || "")}
+        ${stat("Takeoff", o.start_time, o.mission_date || "", "green")}
+        ${stat("Theatre", o.theatre, (b.airbases || {}).departure || "")}
+      </div>` +
+      `<div class="grid c4" style="margin-top:12px">
+        ${stat("Fuel", c.fuel_pct != null ? `${c.fuel_pct}%` : "—", "of internal capacity")}
+        ${stat("MG rounds", r.bullets != null ? String(r.bullets) : "—", "at spawn")}
+        ${stat("Cannon", r.shells != null ? String(r.shells) : "—", "at spawn")}
+        ${stat("Bombs / rockets", `${r.bombs ?? "—"} / ${r.rockets ?? "—"}`, "at spawn")}
+      </div>` +
+      `<div class="grid" style="margin-top:12px">${card(
+        "Mission Briefing",
+        prose(b.situation, "This mission carries no briefing text.")
+      )}</div>` +
+      `<div class="grid" style="margin-top:12px">${card(
+        "Your Flight",
+        table(
+          ["#", ...(roster.headers || [])],
+          (roster.rows || []).map((row) => [
+            esc(row.callsign),
+            ...row.pilots.map((p) => esc(p)),
+          ]),
+          { empty: "No other aircraft in your flight." }
+        )
+      )}</div>`
+    );
+  }
 
   if (isDcs(d)) {
     const c = b.consumables || {};
@@ -246,6 +287,27 @@ function renderBrief(d) {
 
 /* ------------------------------------------------------------- loadout */
 
+/** Each sim reads its loadout from somewhere different, and the caveats differ. */
+const PROVENANCE = {
+  bms:
+    "Stores are read from the Ordnance section of briefing.txt. Weights and missile " +
+    "ranges come from Falcon4_WCD.xml in your BMS install. Range is only shown for " +
+    "missiles &mdash; BMS stores a placeholder value for bombs that would be misleading " +
+    "as a release range. Employment guidance, fuzing and laser applicability are curated " +
+    "reference notes, not game data. External tank weights are dry weights, not fuel loads.",
+  dcs:
+    "Stores are read from the pylon table in the mission's .miz. Employment guidance, " +
+    "fuzing and laser applicability are curated reference notes covering the F/A-18C, " +
+    "A-10C and AV-8B; anything else shows its raw CLSID. DCS publishes no per-store " +
+    "weight or range this board can trust, so those fields stay empty.",
+  il2:
+    "Store names come from IL-2's own tables inside Scripts.gtp and Swf.gtp, read " +
+    "directly rather than curated &mdash; the payload id in the mission is an index into " +
+    "the aircraft's own ammunition list. Quantities use the game's label, cross-checked " +
+    "against the ordnance entries behind it. IL-2 publishes no per-store weight or range, " +
+    "so those stay empty, and there is no employment guidance to draw on.",
+};
+
 function storeBlock(store, index, prefix) {
   const facts = [];
   if (store.range_nm) facts.push(`RNG <b>${store.range_nm} nm</b>`);
@@ -306,11 +368,24 @@ function renderLoadout(d) {
   const others = flights.filter((f) => f !== player);
   const lead = player.aircraft[0] || { stores: [], total_weight_lb: null };
 
+  // IL-2 has two loadout sources of differing authority, and no laser weapons.
+  const src = loadout.source || null;
+  const il2Head = isDcs(d)
+    ? ""
+    : src
+    ? stat(
+        src.kind === "as-flown" ? "As Flown" : "Planned",
+        src.kind === "as-flown" ? "confirmed" : "default",
+        src.kind === "as-flown" ? src.log : "mission default",
+        src.kind === "as-flown" ? "green" : "amber"
+      )
+    : "";
+
   const head = [
     stat("Flight", player.callsign, `${player.aircraft.length} aircraft`, "amber"),
     // DCS publishes no per-store weight worth trusting, so the slot shows the
     // airframe instead of an empty figure with a misleading caption.
-    isDcs(d)
+    isDcs(d) || isIl2(d)
       ? stat("Aircraft", lead.label || "—", "from the mission file")
       : stat(
           "Stores Weight",
@@ -318,12 +393,22 @@ function renderLoadout(d) {
           "per aircraft, game data"
         ),
     stat("Store Types", String(lead.stores.length), "distinct stores loaded"),
-    stat(
-      "Laser Code",
-      d.laser.needed ? d.laser.code || "not set" : "n/a",
-      d.laser.needed ? "required by loadout" : "no laser weapons",
-      d.laser.needed ? "amber" : ""
-    ),
+    // IL-2 predates laser designation, so that slot carries fuel instead.
+    isIl2(d)
+      ? stat(
+          src && src.kind === "as-flown" ? "As Flown" : "Planned",
+          (loadout.as_flown || loadout.planned || {}).fuel_pct != null
+            ? `${(loadout.as_flown || loadout.planned).fuel_pct}% fuel`
+            : "—",
+          src ? src.confidence : "",
+          src && src.kind === "as-flown" ? "green" : "amber"
+        )
+      : stat(
+          "Laser Code",
+          d.laser.needed ? d.laser.code || "not set" : "n/a",
+          d.laser.needed ? "required by loadout" : "no laser weapons",
+          d.laser.needed ? "amber" : ""
+        ),
   ].join("");
 
   const stores = lead.stores
@@ -335,7 +420,8 @@ function renderLoadout(d) {
       "Per-aircraft detail is below.</div>"
     : "";
 
-  const laserPanel = renderLaserPanel(d);
+  // IL-2 gets a source panel where the other sims get the laser-code panel.
+  const laserPanel = isIl2(d) ? renderIl2SourcePanel(d, loadout) : renderLaserPanel(d);
 
   const otherBlocks = others.length
     ? card(
@@ -386,13 +472,62 @@ function renderLoadout(d) {
     (otherBlocks ? `<div class="grid" style="margin-top:12px">${otherBlocks}</div>` : "") +
     `<div class="grid" style="margin-top:12px">${card(
       "Where this comes from",
-      '<div class="hint">Stores are read from the Ordnance section of briefing.txt. ' +
-        "Weights and missile ranges come from Falcon4_WCD.xml in your BMS install. " +
-        "Range is only shown for missiles &mdash; BMS stores a placeholder value for " +
-        "bombs that would be misleading as a release range. Employment guidance, " +
-        "fuzing and laser applicability are curated reference notes, not game data. " +
-        "External tank weights are dry weights, not fuel loads.</div>"
+      `<div class="hint">${PROVENANCE[d.sim] || PROVENANCE.bms}</div>`
     )}</div>`
+  );
+}
+
+/** Where IL-2's loadout came from, and how planned differs from as flown. */
+function renderIl2SourcePanel(d, loadout) {
+  const src = loadout.source || {};
+  const planned = loadout.planned || {};
+  const flown = loadout.as_flown;
+  const differs = loadout.differs || [];
+
+  const warning = differs.length
+    ? `<div class="banner">The mission's default loadout differs from what you actually flew ` +
+      `(${differs.map((x) => esc(x)).join(", ")}). Showing as flown.</div>`
+    : "";
+
+  const rows = [
+    [
+      "Payload",
+      planned.payload_id != null ? `#${planned.payload_id}` : "&mdash;",
+      flown && flown.payload_id != null ? `#${flown.payload_id}` : "&mdash;",
+    ],
+    [
+      "Fuel",
+      planned.fuel_pct != null ? `${planned.fuel_pct}%` : "&mdash;",
+      flown && flown.fuel_pct != null ? `${flown.fuel_pct}%` : "&mdash;",
+    ],
+  ];
+
+  return (
+    warning +
+    `<div class="grid c2" style="margin-top:12px">
+      ${card(
+        src.kind === "as-flown" ? "Source — as flown" : "Source — mission default",
+        `<div class="hint">${esc(src.note || "")}</div>` +
+          (src.raw
+            ? `<h5 style="margin:11px 0 4px;font-size:10px;letter-spacing:.12em;` +
+              `text-transform:uppercase;color:var(--text-faint)">Game's own label</h5>` +
+              `<div class="mono-block">${esc(src.raw)}</div>`
+            : "") +
+          ((src.reasons || []).length
+            ? `<div class="hint" style="margin-top:8px">${(src.reasons || [])
+                .map((r) => esc(r))
+                .join("<br>")}</div>`
+            : "")
+      )}
+      ${card(
+        "Planned vs as flown",
+        table(["", "Planned", "As flown"], rows) +
+          '<div class="hint" style="margin-top:8px">Weapon modifications and gun round ' +
+          "counts are not shown: IL-2's modification bitmask digit order and whether a " +
+          "round count is per-gun or a total are both unconfirmed, so displaying them " +
+          "would mean guessing.</div>"
+      )}
+    </div>`
   );
 }
 
@@ -470,6 +605,32 @@ function renderComms(d) {
   const b = d.briefing || {};
   const comms = b.comms || { rows: [] };
   const dtc = d.dtc || { uhf: [], vhf: [] };
+
+  // IL-2 models no tunable radio, so there are no frequencies to publish at all.
+  // What it does have is callsigns, which are worth knowing.
+  if (isIl2(d)) {
+    const rows = comms.rows.map((r) => [
+      esc(r.agency),
+      `<span style="color:var(--cyan)">${esc(r.callsign)}</span>`,
+      `<span class="wrap dim">${esc(r.notes)}</span>`,
+    ]);
+    return (
+      pageHead("Communications", "callsigns only") +
+      `<div class="grid">${card(
+        "Callsigns",
+        table(["Agency", "Callsign", "Notes"], rows, {
+          empty: "No callsigns could be resolved for this mission.",
+        })
+      )}</div>` +
+      `<div class="grid" style="margin-top:12px">${card(
+        "Note",
+        '<div class="hint">IL-2 aircraft of this era have no tunable radio and the mission ' +
+          "files carry no frequencies, so there is nothing to list. Callsigns come from " +
+          "the mission's callsign and number fields resolved against the game's own " +
+          "callsign table. The preset, IFF and Link 16 panels do not apply.</div>"
+      )}</div>`
+    );
+  }
 
   // DCS has no comm ladder or IFF rotation; what it does have is the aircraft's
   // programmed preset channels, one block per radio.
@@ -616,6 +777,16 @@ function renderThreats(d) {
     `<span class="wrap dim">${esc(s.detail)}</span>`,
   ]);
 
+  if (isIl2(d)) {
+    return (
+      pageHead("Threats & Support") +
+      '<div class="banner">IL-2 missions carry no threat brief. The mission file places every ' +
+      "unit on the map, but nothing marks which threaten your route, so building a threat " +
+      "picture from it would be invention rather than reading. The mission briefing on the " +
+      "Brief page is what the game itself tells you.</div>"
+    );
+  }
+
   if (isDcs(d)) {
     return (
       pageHead("Threats & Support") +
@@ -656,14 +827,19 @@ function renderWeather(d) {
     const row = (wx.rows || []).find((r) => r.label.toLowerCase().startsWith(label));
     return row ? row.values[0] : "";
   };
-  // BMS forecasts per phase of flight; DCS weather applies to the whole mission.
-  const when = isDcs(d) ? "mission-wide" : "at takeoff";
+  // BMS forecasts per phase of flight; DCS and IL-2 weather apply mission-wide.
+  const when = isDcs(d) || isIl2(d) ? "mission-wide" : "at takeoff";
+  // IL-2 records no visibility distance -- it models haze instead -- so that slot
+  // would always be empty. Show temperature there rather than a dash.
+  const fourth = isIl2(d)
+    ? stat("Temperature", pick("temperature"), when, "green")
+    : stat("Visibility", pick("visibility"), when, "green");
   return (
     pageHead("Weather") +
     `<div class="grid c4">
       ${stat("Conditions", pick("situation"), when)}
       ${stat("Wind", pick("wind"), when)}
-      ${stat("Visibility", pick("visibility"), when, "green")}
+      ${fourth}
       ${stat("Cloud Base", pick("cloud"), when)}
     </div>` +
     `<div class="grid" style="margin-top:12px">${card(
@@ -679,6 +855,50 @@ function renderCharts(d) {
   const resolved = (d.charts || {}).resolved || [];
   const airfields = (d.charts || {}).airfields || [];
   const summary = (d.charts || {}).summary || {};
+
+  // IL-2 ships no approach plates either, but its mission files do carry taxi
+  // routes for each airfield, which are drawn here from their coordinates.
+  if (isIl2(d)) {
+    const taxi = (d.charts || {}).taxi || [];
+    const pages = (d.charts || {}).pages || [];
+
+    // A scripted campaign carries its own briefing map instead of taxi routes.
+    if (pages.length) {
+      let chosen = viewerChoice.page;
+      if (!chosen || !pages.some((p) => p.entry === chosen)) chosen = pages[0].entry;
+      const buttons = pages
+        .map(
+          (p) =>
+            `<button data-page="${esc(p.entry)}" class="${p.entry === chosen ? "active" : ""}">${esc(
+              p.name
+            )}</button>`
+        )
+        .join("");
+      return (
+        pageHead("Campaign Map", "shipped with this campaign mission") +
+        `<div class="chart-list">${buttons}</div>` +
+        viewerFor(`/il2page/${encodeURI(chosen)}`, chosen)
+      );
+    }
+
+    if (!taxi.length) {
+      return (
+        pageHead("Airfield Diagrams") +
+        '<div class="banner">No taxi route is recorded for your departure field, and IL-2 ' +
+        "ships no approach plates, so there is nothing to draw here.</div>"
+      );
+    }
+    return (
+      pageHead("Airfield Diagrams", "taxi routes from the mission file") +
+      `<div class="grid c2">${taxi.map(taxiCard).join("")}</div>` +
+      `<div class="grid" style="margin-top:12px">${card(
+        "Note",
+        '<div class="hint">These are the taxi routes the mission file records for each ' +
+          "field, in metres relative to the field origin. IL-2 publishes no approach " +
+          "plates, so this is the only airfield diagram available.</div>"
+      )}</div>`
+    );
+  }
 
   // DCS ships no approach plates. What it can carry is kneeboard pages the
   // mission generator embedded in the .miz, which is what goes here instead.
@@ -795,10 +1015,64 @@ function renderChartArea() {
   wirePanZoom(host);
 }
 
+/** Draw one airfield's taxi route as inline SVG.
+ *
+ * Point types are parking (0), taxiway (1) and runway (2). Drawn rather than
+ * served as an image, so no file-serving route or whitelist is involved.
+ */
+function taxiCard(entry) {
+  const points = entry.points || [];
+  if (!points.length) return "";
+
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const pad = 20;
+  const width = Math.max(maxX - minX, 1);
+  const height = Math.max(maxY - minY, 1);
+
+  // Fit into a fixed viewBox, preserving aspect ratio.
+  const box = 300;
+  const scale = Math.min((box - pad * 2) / width, (box - pad * 2) / height);
+  const px = (p) => pad + (p.x - minX) * scale;
+  const py = (p) => box - (pad + (p.y - minY) * scale);
+
+  const path = points.map((p, i) => `${i ? "L" : "M"}${px(p).toFixed(1)},${py(p).toFixed(1)}`).join(" ");
+  const dots = points
+    .map((p) => {
+      const colour =
+        p.type === 2 ? "var(--green)" : p.type === 0 ? "var(--amber)" : "var(--cyan)";
+      return `<circle cx="${px(p).toFixed(1)}" cy="${py(p).toFixed(1)}" r="3" fill="${colour}"/>`;
+    })
+    .join("");
+
+  const extent = `${Math.round(width)} x ${Math.round(height)} m`;
+  return card(
+    `${entry.label} — ${entry.airfield}`,
+    `<svg viewBox="0 0 ${box} ${box}" style="width:100%;height:auto;background:var(--viewer-bg);border-radius:4px">
+      <path d="${path}" fill="none" stroke="var(--border-bright)" stroke-width="2"/>
+      ${dots}
+    </svg>
+    <div class="hint" style="margin-top:8px">${esc(extent)}${
+      entry.callsign ? ` &middot; callsign ${esc(entry.callsign)}` : ""
+    } &middot; <span style="color:var(--amber)">parking</span>,
+    <span style="color:var(--cyan)">taxiway</span>,
+    <span style="color:var(--green)">runway</span></div>`
+  );
+}
+
 /* ---------------------------------------------------------------- maps */
 
 function renderMaps(d) {
   const maps = (d.charts || {}).maps || [];
+  if (isIl2(d) && !maps.length)
+    return (
+      pageHead("Maps") +
+      '<div class="banner">IL-2 keeps its theatre maps inside packed archives as terrain ' +
+      "data rather than as images, so there is nothing to show here. The Charts tab " +
+      "carries the taxi diagrams the mission file does record.</div>"
+    );
   if (isDcs(d) && !maps.length)
     return (
       pageHead("Maps") +
@@ -1098,16 +1372,16 @@ function renderStatus() {
   }
   const install = DATA.install || {};
   const sims = DATA.sims || { available: [], preference: "auto", active: DATA.sim };
-  sub.textContent =
-    DATA.sim === "dcs"
-      ? `DCS ${install.version || ""}`.trim()
-      : `BMS ${install.version || "?"}`;
+  sub.textContent = `${SIM_LABELS[DATA.sim] || "BMS"} ${
+    install.version || (DATA.sim === "bms" ? "?" : "")
+  }`.trim();
   fresh.innerHTML = '<span class="live">&#9679; live</span>';
 
   // The sim button doubles as the indicator of which sim is showing.
   const simBtn = document.getElementById("sim-btn");
   if (simBtn) {
-    const active = (sims.active || DATA.sim || "").toUpperCase();
+    const key = sims.active || DATA.sim || "";
+    const active = SIM_LABELS[key] || key.toUpperCase();
     simBtn.textContent = sims.preference === "auto" ? `${active} (auto)` : active;
     simBtn.classList.toggle("on", sims.preference !== "auto");
     simBtn.title =
@@ -1130,9 +1404,9 @@ function renderStatus() {
       }`;
 
   const sourceLine =
-    DATA.sim === "dcs"
+    DATA.sim === "dcs" || DATA.sim === "il2"
       ? install.mission_name
-        ? `miz ${esc(install.mission_name)}`
+        ? `${DATA.sim === "il2" ? "mission" : "miz"} ${esc(install.mission_name)}`
         : "no mission found"
       : b.generated
       ? `brief ${esc(b.generated)}`
