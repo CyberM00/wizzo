@@ -14,6 +14,7 @@ import argparse
 import io
 import mimetypes
 import os
+import re
 import socket
 import sys
 import webbrowser
@@ -64,6 +65,36 @@ def api_state():
     payload = dict(state.get(force=request.args.get("force") == "1"))
     payload["app"] = {"version": __version__, "update": update_info}
     return jsonify(payload)
+
+
+MAP_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,60}$")
+
+
+@app.route("/il2map/<map_id>")
+def il2_map(map_id: str):
+    """Serve an IL-2 theatre map, stitching it on first request.
+
+    Stitching decodes eighty tiles, so it is done here rather than while building
+    the board -- the cost is paid once, when the Maps page is actually opened, and
+    the result is cached until the game's archive changes.
+    """
+    assert state is not None
+    if not MAP_ID_RE.match(map_id or "") or state.il2 is None:
+        abort(404)
+
+    from bmskb.il2.maps import MapError, TheatreMap
+
+    theatre = TheatreMap(state.il2.data_dir, map_id)
+    if not theatre.ok:
+        abort(404)
+    try:
+        path = theatre.build()
+    except MapError as exc:
+        app.logger.warning("IL-2 map %s could not be built: %s", map_id, exc)
+        abort(503)
+    response = send_file(path, mimetype="image/jpeg")
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
 
 
 @app.route("/manual/<sim>/<path:relative>")

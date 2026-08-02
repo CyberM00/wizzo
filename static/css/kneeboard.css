@@ -400,6 +400,20 @@ td.wrap { font-family: var(--sans); white-space: normal; }
   user-select: none;
   -webkit-user-drag: none;
 }
+/* The theatre map pans as one stage so its route overlay tracks the image. */
+.viewer .pan .stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+.viewer .pan .stage img { position: absolute; transform: none; }
+.viewer .pan .stage .overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
 .viewer-bar {
   position: absolute;
   right: 10px;

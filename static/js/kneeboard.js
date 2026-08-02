@@ -1229,6 +1229,34 @@ function taxiCard(entry) {
 
 function renderMaps(d) {
   const maps = (d.charts || {}).maps || [];
+
+  // IL-2 ships the map its own planner draws, with the extent stated in metres,
+  // so the mission's own positions can be placed on it exactly.
+  if (isIl2(d)) {
+    const map = (d.charts || {}).theatre || {};
+    if (!map.available)
+      return (
+        pageHead("Maps") +
+        `<div class="banner">The theatre map is unavailable${
+          map.error ? `: ${esc(map.error)}` : "."
+        }</div>`
+      );
+    const legend =
+      '<span class="tag amber">route</span> <span class="tag cyan">airfields</span> ' +
+      '<span class="tag green">your start</span>';
+    return (
+      pageHead(
+        "Maps",
+        `${map.name} — ${map.metres_per_pixel} m per pixel${map.cached ? "" : ", building on first view"}`
+      ) +
+      `<div class="row-flow" style="margin-bottom:8px">${legend}</div>` +
+      theatreMapViewer(map) +
+      `<div class="hint" style="margin-top:8px">Drag to pan, scroll to zoom. Positions come ` +
+      `from the mission file and are placed using the extent IL-2 states for the map, ` +
+      `checked against its own printed grid.</div>`
+    );
+  }
+
   if (isIl2(d) && !maps.length)
     return (
       pageHead("Maps") +
@@ -1266,6 +1294,72 @@ function renderMaps(d) {
 
 /* -------------------------------------------------------------- viewer */
 
+/** The theatre map with the flight plan drawn over it, as one pannable stage. */
+function theatreMapViewer(map) {
+  const w = map.width;
+  const h = map.height;
+  const route = map.route || [];
+  const fields = map.airfields || [];
+
+  // Scale the annotation with the map so it stays legible when zoomed out.
+  const unit = Math.max(6, Math.round(w / 700));
+  const line = Math.max(2, Math.round(unit / 2.5));
+
+  const legs = route.length > 1
+    ? `<polyline points="${route.map((p) => `${p.x},${p.y}`).join(" ")}"
+         fill="none" stroke="var(--amber)" stroke-width="${line * 1.6}"
+         stroke-linejoin="round" stroke-opacity="0.9"/>`
+    : "";
+
+  const marks = route
+    .map(
+      (p) =>
+        `<circle cx="${p.x}" cy="${p.y}" r="${unit * 1.5}" fill="var(--bg)" ` +
+        `stroke="var(--amber)" stroke-width="${line}"/>` +
+        `<text x="${p.x}" y="${p.y + unit * 0.62}" text-anchor="middle" ` +
+        `font-size="${unit * 1.7}" fill="var(--amber)" font-family="monospace">${p.order}</text>` +
+        (p.label && !/^\d+$/.test(p.label)
+          ? `<text x="${p.x + unit * 2.2}" y="${p.y - unit * 1.5}" font-size="${unit * 1.7}" ` +
+            `fill="var(--amber)" font-family="monospace" ` +
+            `stroke="var(--bg)" stroke-width="${line * 0.9}" paint-order="stroke">${esc(p.label)}</text>`
+          : "")
+    )
+    .join("");
+
+  const bases = fields
+    .map(
+      (f) =>
+        `<rect x="${f.x - unit}" y="${f.y - unit}" width="${unit * 2}" height="${unit * 2}" ` +
+        `fill="none" stroke="var(--cyan)" stroke-width="${line}"/>` +
+        `<text x="${f.x + unit * 1.8}" y="${f.y + unit * 2.4}" font-size="${unit * 1.5}" ` +
+        `fill="var(--cyan)" font-family="monospace" stroke="var(--bg)" ` +
+        `stroke-width="${line * 0.9}" paint-order="stroke">${esc(f.name)}</text>`
+    )
+    .join("");
+
+  const spawn = map.spawn
+    ? `<circle cx="${map.spawn.x}" cy="${map.spawn.y}" r="${unit * 2.1}" fill="none" ` +
+      `stroke="var(--green)" stroke-width="${line}"/>` +
+      `<circle cx="${map.spawn.x}" cy="${map.spawn.y}" r="${line}" fill="var(--green)"/>`
+    : "";
+
+  return `<div class="viewer">
+    <div class="pan" data-pan>
+      <div class="stage" data-stage style="width:${w}px;height:${h}px">
+        <img src="${esc(map.url)}" alt="${esc(map.name)} theatre map" draggable="false">
+        <svg class="overlay" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"
+             xmlns="http://www.w3.org/2000/svg">${bases}${legs}${marks}${spawn}</svg>
+      </div>
+    </div>
+    <div class="viewer-bar">
+      <button data-zoom="in">+</button>
+      <button data-zoom="out">&minus;</button>
+      <button data-zoom="fit">FIT</button>
+      <button data-zoom="1">1:1</button>
+    </div>
+  </div>`;
+}
+
 function viewerFor(url, rel) {
   if (!rel) return '<div class="empty">Nothing to display.</div>';
   if (rel.toLowerCase().endsWith(".pdf")) {
@@ -1291,10 +1385,13 @@ function wirePanZoom(root = document) {
     pan.dataset.wired = "1";
 
     const img = pan.querySelector("img");
+    // The theatre map wraps its image and its route overlay in a stage so both
+    // are transformed as one; a plain chart has no stage and moves the image.
+    const target = pan.querySelector("[data-stage]") || img;
     const view = { scale: 1, x: 0, y: 0 };
 
     const apply = () => {
-      img.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+      target.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
     };
 
     const fit = () => {

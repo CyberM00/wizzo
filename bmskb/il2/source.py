@@ -23,6 +23,65 @@ from .mission import Il2Mission, MissionError
 KG_TO_LB = 2.204622622
 
 
+def _theatre_map(install, mission) -> dict:
+    """Metadata for the theatre map, and the mission's own positions on it.
+
+    The raster itself is not built here -- it is stitched and cached the first
+    time the image is actually requested, so opening any other page never pays
+    for it.
+    """
+    from . import missionfile as mf
+    from .maps import TheatreMap
+
+    gui_map = mf.as_str(mission.options.get("GuiMap"))
+    try:
+        theatre = TheatreMap(install.data_dir, gui_map)
+    except Exception as exc:  # never let a map problem break the board
+        return {"available": False, "error": str(exc), "gui_map": gui_map}
+
+    if not theatre.ok:
+        return {"available": False, "error": theatre.error, "gui_map": gui_map}
+
+    def place(x_north, z_east):
+        if x_north is None or z_east is None:
+            return None
+        px, py = theatre.to_pixel(x_north, z_east)
+        return {"x": round(px, 1), "y": round(py, 1)}
+
+    route = []
+    for point in mission.route():
+        position = point.get("position") or (None, None, None)
+        spot = place(position[0], position[2])
+        if spot:
+            route.append(dict(spot, label=point["name"], order=point["order"]))
+
+    airfields = []
+    for field in mission.airfields():
+        spot = place(field["position"][0], field["position"][2])
+        if spot:
+            airfields.append(dict(spot, name=field["name"]))
+
+    flight = mission.flight()
+    spawn = place(flight["position"][0], flight["position"][2])
+
+    width, height = theatre.pixel_size
+    return {
+        "available": True,
+        "error": "",
+        "gui_map": gui_map,
+        "name": gui_map.replace("-", " ").title(),
+        "url": f"/il2map/{gui_map}",
+        "width": width,
+        "height": height,
+        "metres_per_pixel": round(theatre.metres_per_pixel, 2),
+        "visible": theatre.visible_box(),
+        "route": route,
+        "airfields": airfields,
+        "spawn": spawn,
+        "cached": bool(theatre.cached()),
+    }
+
+
 def _code_for(weapons, display_name: str) -> str:
     """The aircraft's directory code, resolved from its display name."""
     key, record = weapons.find_aircraft(display_name=display_name)
@@ -401,6 +460,15 @@ def build(install, mission_path: Path, weapons, reference) -> dict:
 
     # -- charts: taxi diagrams for the fields that matter ------------------
 
+    theatre_map = _theatre_map(install, mission)
+    if not theatre_map.get("available") and theatre_map.get("error"):
+        warnings.append(
+            {
+                "level": "warn",
+                "text": f"The theatre map could not be prepared: {theatre_map['error']}",
+            }
+        )
+
     taxi = []
     for label, field in (("Departure", departure), ("Recovery", recovery)):
         if field and field["taxi_points"]:
@@ -509,7 +577,12 @@ def build(install, mission_path: Path, weapons, reference) -> dict:
             "maps": [],
             "pages": [],
             "taxi": taxi,
-            "summary": {"airfield_count": len(mission.airfields()), "chart_count": len(taxi), "map_count": 0},
+            "theatre": theatre_map,
+            "summary": {
+                "airfield_count": len(mission.airfields()),
+                "chart_count": len(taxi),
+                "map_count": 1 if theatre_map.get("available") else 0,
+            },
         },
         "warnings": warnings,
     }

@@ -93,7 +93,7 @@ If an update changes `requirements.txt`, the console says so and you should run
 | **Threats** | Air and surface threat analysis, support assets with TACAN channels |
 | **Weather** | Conditions at takeoff, target and landing |
 | **Charts** | Approach plates auto-selected for your departure, recovery, alternate and target fields; all 89 KTO airfields browsable |
-| **Maps** | Theatre maps with drag-to-pan and scroll-to-zoom |
+| **Maps** | BMS: theatre maps. IL-2: the sim's own planner map with your route, waypoints and airfields drawn on it |
 
 Keys `1`–`9` switch pages, `H` opens the sim chooser. `R` forces a reload. `T`
 switches theme.
