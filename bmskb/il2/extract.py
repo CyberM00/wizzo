@@ -30,11 +30,16 @@ from pathlib import Path
 
 from .gtp import GtpError, open_archive
 
-CACHE_SCHEMA = 1
+# 2: added the per-aircraft technical notes.
+CACHE_SCHEMA = 2
 CACHE_PATH = Path(__file__).parent.parent.parent / "il2_name_cache.json"
 
 PLANE_MEMBER_RE = re.compile(r"/luascripts/worldobjects/planes/[a-z0-9_]+\.txt$")
 LOCALE_MEMBER_RE = re.compile(r"/swf/il2/ammunition/ammunition\.locale=\w+\.txt$")
+# The aircraft notes IL-2 shows in its own UI: performance limits, engine modes,
+# and the recommended control settings. One file per aircraft, per language.
+INFO_MEMBER_RE = re.compile(r"^/swf/il2/worldobjects/planes/[^/]+/info\.locale=\w+\.txt$")
+INFO_FIELD_RE = re.compile(r"^&(\w+)=", re.M)
 
 OBJECT_NAME_RE = re.compile(r'object_name\s*=\s*"([^"]*)"')
 # Ammunition blocks never nest (verified across 3,387 blocks), so a non-greedy
@@ -229,6 +234,46 @@ def tokenise_payload(raw: str, names: dict[str, dict], ballistics: list[tuple[st
     return items
 
 
+def parse_info_file(text: str) -> dict:
+    """Parse a ``&key=value`` aircraft note file.
+
+    Values run over multiple lines until the next ``&key=``. The description is
+    wrapped in single quotes and percent-encodes its literal percent signs, so a
+    fuel setting reads ``10%25`` in the raw file.
+    """
+    fields: dict[str, str] = {}
+    matches = list(INFO_FIELD_RE.finditer(text))
+    for index, match in enumerate(matches):
+        stop = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        value = text[match.end():stop].strip()
+        if value.startswith("'"):
+            value = value[1:]
+        if value.endswith("'"):
+            value = value[:-1]
+        fields[match.group(1)] = value.replace("%25", "%").strip()
+    return fields
+
+
+def _aircraft_info(archive, locale: str) -> dict[str, dict]:
+    """Per-aircraft notes, keyed by the aircraft's directory code."""
+    wanted = f"info.locale={locale.lower()}.txt"
+    out: dict[str, dict] = {}
+    for member in sorted(archive.entries):
+        if not member.endswith(wanted):
+            continue
+        code = member.split("/")[5]
+        try:
+            fields = parse_info_file(archive.read(member).decode("utf-8-sig", "replace"))
+        except Exception:
+            continue
+        if fields.get("description") or fields.get("name"):
+            out[code] = {
+                "name": fields.get("name", ""),
+                "description": fields.get("description", ""),
+            }
+    return out
+
+
 def parse_plane_script(text: str, names: dict[str, dict]) -> dict:
     payloads: dict[str, dict] = {}
     for match in AMMO_RE.finditer(text):
@@ -271,9 +316,10 @@ def build_tables(install_base: Path, locale: str = "eng") -> dict:
 
     started = time.time()
 
-    # Names first -- the vocabulary is what makes payload parsing possible.
+    # Names first -- the vocabulary is what makes payload parsing possible. The
+    # aircraft notes come from the same archive, so both are taken in one pass.
     try:
-        with open_archive(swf, LOCALE_MEMBER_RE) as archive:
+        with open_archive(swf, _either(LOCALE_MEMBER_RE, INFO_MEMBER_RE)) as archive:
             member = _pick_locale(archive.entries, locale)
             if not member:
                 raise ExtractError(
@@ -281,6 +327,7 @@ def build_tables(install_base: Path, locale: str = "eng") -> dict:
                 )
             chosen_locale = _locale_of(member)
             names = parse_locale_table(_decode_locale(archive.read(member)))
+            info = _aircraft_info(archive, chosen_locale or locale)
     except GtpError as exc:
         raise ExtractError(str(exc)) from exc
 
@@ -334,11 +381,17 @@ def build_tables(install_base: Path, locale: str = "eng") -> dict:
         "stats": {
             "aircraft": len(aircraft),
             "names": len(names),
+            "notes": len(info),
             "unresolved": unresolved,
         },
         "names": names,
         "aircraft": aircraft,
+        "info": info,
     }
+
+
+def _either(*patterns: re.Pattern) -> re.Pattern:
+    return re.compile("|".join(f"(?:{p.pattern})" for p in patterns), patterns[0].flags)
 
 
 def _pick_locale(entries: dict, locale: str) -> str:
@@ -350,7 +403,10 @@ def _pick_locale(entries: dict, locale: str) -> str:
     for name in entries:
         if name.endswith("ammunition.locale=eng.txt"):
             return name
-    return sorted(entries)[0] if entries else ""
+    # Last resort must still be an ammunition table -- the archive is now opened
+    # with a filter that also admits the aircraft note files.
+    tables = sorted(n for n in entries if "/ammunition/" in n)
+    return tables[0] if tables else ""
 
 
 def _locale_of(member: str) -> str:

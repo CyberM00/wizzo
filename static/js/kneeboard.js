@@ -10,6 +10,7 @@ const TABS = [
   { id: "home", label: "Home" },
   { id: "brief", label: "Brief" },
   { id: "loadout", label: "Loadout" },
+  { id: "aircraft", label: "Aircraft" },
   { id: "steer", label: "Steer" },
   { id: "comms", label: "Comms" },
   { id: "threats", label: "Threats" },
@@ -651,6 +652,85 @@ function renderLaserPanel(d) {
     )}
     ${card("Laser Code Rules", `<ul class="prose" style="padding-left:17px">${rules}</ul>`)}
   </div>`;
+}
+
+/* ------------------------------------------------------------ aircraft */
+
+function renderAircraft(d) {
+  const b = d.briefing || {};
+  const notes = b.aircraft_notes || {};
+  const manuals = d.manuals || {};
+  const o = b.overview || {};
+  const airframe = notes.name || o.aircraft_type || "";
+
+  // IL-2 publishes the figures; BMS and DCS ship PDFs instead.
+  if (notes.available) {
+    const cards = (notes.summary || [])
+      .map((s) => stat(s.label, s.value))
+      .join("");
+    const sections = (notes.sections || [])
+      .map((g) =>
+        card(
+          g.heading || "",
+          prose([{ heading: "", items: g.items }])
+        )
+      )
+      .join("");
+
+    return (
+      pageHead("Aircraft", airframe ? `${airframe} — from the sim's own data` : "") +
+      (cards ? `<div class="grid c4">${cards}</div>` : "") +
+      `<div class="grid c2" style="margin-top:12px">${sections}</div>` +
+      `<div class="grid" style="margin-top:12px">${card(
+        "Where this comes from",
+        '<div class="hint">These are the notes IL-2 shows in its own aircraft screen, ' +
+          "read straight out of the game. Metric figures are the sim's; imperial " +
+          "equivalents are added for speeds, climb rates and altitudes. Load factors, " +
+          "angles, temperatures and fuel flows are left as written.</div>"
+      )}</div>`
+    );
+  }
+
+  const matched = manuals.matched || [];
+  const all = manuals.all || [];
+
+  if (!manuals.available || (!matched.length && !all.length)) {
+    return (
+      pageHead("Aircraft", airframe) +
+      `<div class="banner">${esc(
+        (d.sim || "").toUpperCase()
+      )} does not publish aircraft performance data in a form this board can read, and no manuals were found in its install either.</div>`
+    );
+  }
+
+  const docList = (docs) =>
+    docs.length
+      ? `<div class="chart-list">${docs
+          .map(
+            (doc) =>
+              `<a class="doc-link" href="/manual/${esc(d.sim)}/${encodeURI(doc.rel)}" target="_blank" rel="noopener">` +
+              `${esc(doc.title)}<span class="doc-meta">${esc(doc.format.toUpperCase())} · ${
+                doc.size_mb
+              } MB</span></a>`
+          )
+          .join("")}</div>`
+      : '<div class="empty">Nothing listed.</div>';
+
+  return (
+    pageHead("Aircraft", airframe ? `${airframe} — manuals from your install` : "") +
+    `<div class="banner info">${esc(
+      (d.sim || "").toUpperCase()
+    )} ships aircraft documentation as PDFs rather than as data, so these open as documents. Turning them into performance figures would mean parsing prose, which this board does not guess at.</div>` +
+    (matched.length
+      ? `<div class="grid" style="margin-top:10px">${card(
+          `For your aircraft${airframe ? ` — ${airframe}` : ""}`,
+          docList(matched)
+        )}</div>`
+      : "") +
+    `<div class="grid c2" style="margin-top:12px">${all
+      .map((group) => card(group.group, docList(group.documents)))
+      .join("")}</div>`
+  );
 }
 
 /* --------------------------------------------------------------- steer */
@@ -1296,6 +1376,7 @@ const RENDERERS = {
   home: renderHome,
   brief: renderBrief,
   loadout: renderLoadout,
+  aircraft: renderAircraft,
   steer: renderSteer,
   comms: renderComms,
   threats: renderThreats,

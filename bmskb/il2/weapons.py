@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from . import aircraft as aircraft_notes
 from .extract import ExtractError, load_tables
 
 
@@ -151,6 +152,26 @@ class Il2WeaponLibrary:
             "weight_lb": None,
             "range_nm": None,
             "blast_radius": None,
+        }
+
+    def notes_for(self, code: str) -> dict:
+        """IL-2's own technical notes for an aircraft, structured for display.
+
+        These are the figures and handling notes the game shows in its aircraft
+        screen -- speed and load limits, engine modes with their time limits,
+        temperature limits, and the recommended control positions.
+        """
+        if not self.ensure_loaded() or not code:
+            return {"available": False, "name": "", "summary": [], "sections": []}
+        entry = (self.tables.get("info") or {}).get(str(code).lower())
+        if not entry:
+            return {"available": False, "name": "", "summary": [], "sections": []}
+        description = entry.get("description", "")
+        return {
+            "available": bool(description),
+            "name": entry.get("name", ""),
+            "summary": aircraft_notes.summary(description),
+            "sections": aircraft_notes.to_prose(description),
         }
 
     def unknown_codes(self, stores: list[dict]) -> list[str]:

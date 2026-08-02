@@ -23,6 +23,12 @@ from .mission import Il2Mission, MissionError
 KG_TO_LB = 2.204622622
 
 
+def _code_for(weapons, display_name: str) -> str:
+    """The aircraft's directory code, resolved from its display name."""
+    key, record = weapons.find_aircraft(display_name=display_name)
+    return record.get("code", "") if record else ""
+
+
 def build_campaign(install, log, weapons, reference) -> dict:
     """Build the reduced board a scripted DLC campaign mission allows.
 
@@ -177,6 +183,9 @@ def build_campaign(install, log, weapons, reference) -> dict:
             "rounds": player.get("rounds", {}),
         },
         "flight": {},
+        # Only the log's display name is available here, so the aircraft is
+        # resolved through that rather than a script path.
+        "aircraft_notes": weapons.notes_for(_code_for(weapons, player.get("aircraft", ""))),
     }
 
     return {
@@ -476,6 +485,7 @@ def build(install, mission_path: Path, weapons, reference) -> dict:
             "rounds": (log.player or {}).get("rounds", {}) if as_flown_ok and log else {},
         },
         "flight": flight,
+        "aircraft_notes": weapons.notes_for(mission.aircraft_code),
     }
 
     return {

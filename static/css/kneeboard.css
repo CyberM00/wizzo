@@ -459,6 +459,28 @@ select.picker {
   font-family: var(--sans);
 }
 .link-btn:hover { color: var(--amber); border-color: var(--amber); }
+/* Manual links on the Aircraft page, styled like the chart list entries. */
+.doc-link {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 13px;
+  text-decoration: none;
+}
+.doc-link:hover { border-color: var(--amber); color: var(--amber); }
+.doc-meta {
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .link-btn:disabled {
   color: var(--text-faint);
   border-color: var(--border);

@@ -86,6 +86,7 @@ If an update changes `requirements.txt`, the console says so and you should run
 |---|---|
 | **Home** | The sim chooser — status, current mission and timestamp for each sim |
 | **Brief** | Flight, package, time on target, target, situation, package elements, roster, ROE, emergency procedures |
+| **Aircraft** | IL-2: performance limits, engine modes, temperature limits and recommended control settings, from the sim's own data. BMS and DCS: their aircraft manuals, matched to your airframe |
 | **Loadout** | Your stores with weights, missile ranges and expandable employment detail; laser-code panel |
 | **Steer** | Full steerpoint table — time, distance, heading, CAS, altitude, action, formation |
 | **Comms** | Comm ladder alongside the actual UHF/VHF preset table, plus IFF and Link 16 |
@@ -94,7 +95,7 @@ If an update changes `requirements.txt`, the console says so and you should run
 | **Charts** | Approach plates auto-selected for your departure, recovery, alternate and target fields; all 89 KTO airfields browsable |
 | **Maps** | Theatre maps with drag-to-pan and scroll-to-zoom |
 
-Keys `1`–`8` switch pages, `H` opens the sim chooser. `R` forces a reload. `T`
+Keys `1`–`9` switch pages, `H` opens the sim chooser. `R` forces a reload. `T`
 switches theme.
 
 On a portrait screen the nav moves to the top so the full width goes to content,

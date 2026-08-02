@@ -66,6 +66,20 @@ def api_state():
     return jsonify(payload)
 
 
+@app.route("/manual/<sim>/<path:relative>")
+def manual_file(sim: str, relative: str):
+    """Serve an aircraft manual from a sim's own install.
+
+    Confined to the sim's install root by ``_serve_from``, and only for a sim that
+    actually has an indexed manual library.
+    """
+    assert state is not None
+    library = state.manuals.get(sim)
+    if library is None or library.base is None:
+        abort(404)
+    return _serve_from(library.base, relative)
+
+
 @app.route("/api/sims")
 def api_sims():
     """Status of every sim, for the landing page. Stats only, no mission parsing."""

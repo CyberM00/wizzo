@@ -14,6 +14,7 @@ from pathlib import Path
 
 from .briefing import parse_briefing
 from .charts import ChartLibrary
+from .manuals import ManualLibrary
 from .dcs import source as dcs_source
 from .dcs.install import DcsInstall
 from .dcs.mission import MissionError
@@ -104,6 +105,12 @@ class KneeboardState:
             il2.base if il2 else None, il2.language() if il2 else "eng"
         )
         self.il2_reference = Il2Reference(il2, il2.language() if il2 else "eng")
+        # BMS and DCS publish no aircraft performance data, only PDFs. Indexed
+        # once per install, like the chart library.
+        self.manuals = {
+            "bms": ManualLibrary(install.base if install else None, "bms"),
+            "dcs": ManualLibrary(dcs.base if dcs else None, "dcs"),
+        }
         self.charts = ChartLibrary(
             install.charts_dir if install else None,
             install.maps_dir if install else None,
@@ -360,6 +367,33 @@ class KneeboardState:
             out.append("il2")
         return out
 
+    def _manual_block(self, payload: dict) -> dict:
+        """Documents for the aircraft page, where the sim ships PDFs not data.
+
+        IL-2 needs none of this: it publishes the performance figures themselves,
+        which the board shows directly.
+        """
+        sim = payload.get("sim", "")
+        library = self.manuals.get(sim)
+        if library is None or not library.documents:
+            return {"available": False, "matched": [], "all": [], "count": 0}
+
+        overview = (payload.get("briefing") or {}).get("overview") or {}
+        hints = [
+            overview.get("aircraft_id", ""),
+            overview.get("aircraft_type", ""),
+        ]
+        # BMS names the airframe in the package element rather than the overview.
+        for element in (payload.get("briefing") or {}).get("package") or []:
+            if element.get("callsign") == overview.get("flight"):
+                hints.append(element.get("aircraft", ""))
+        return {
+            "available": True,
+            "matched": library.for_aircraft(*hints),
+            "all": library.grouped(),
+            "count": len(library.documents),
+        }
+
     def _build(self) -> dict:
         sim, mission_path = self.choose_sim()
         builders = {"dcs": self._build_dcs, "il2": self._build_il2}
@@ -386,6 +420,7 @@ class KneeboardState:
             payload = self._build_bms()
 
         payload["sim"] = payload.get("sim", sim)
+        payload["manuals"] = self._manual_block(payload)
         payload["sims"] = {
             "available": self._available_sims(),
             "preference": self.settings.get("sim", "auto"),
