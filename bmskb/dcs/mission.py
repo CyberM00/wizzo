@@ -10,10 +10,12 @@ A ``.miz`` is a zip. The pieces that matter:
 Units are converted on the way out, because DCS stores metric internally and a
 kneeboard is read in feet, knots and nautical miles.
 
-One thing deliberately not attempted: waypoint latitude and longitude. DCS
-positions are metres in a projection that differs per terrain, and converting
-without the terrain's parameters would produce confident nonsense. Leg distance
-and bearing *are* computed, because those are valid from the raw offsets.
+Positions stay in the mission's own metres here. They are metres in a projection
+that differs per terrain, and the terrain files rather than the mission are what
+state it -- see ``maps.py``, which solves each terrain's projection from its own
+beacon table and is what places these positions on a chart. Leg distance and
+bearing are computed here regardless, because those are valid from the raw
+offsets alone.
 """
 
 from __future__ import annotations
@@ -304,6 +306,8 @@ class DcsMission:
                 {
                     "index": i,
                     "name": self.text(name) or name,
+                    "x": x,
+                    "z": y,
                     "type": ptype,
                     "action": action,
                     "eta_raw": eta,
@@ -340,6 +344,25 @@ class DcsMission:
                     # showing it twice adds a column of noise.
                     "comments": "" if p["type"] == p["action"] else p["type"],
                     "extra": [],
+                }
+            )
+        return out
+
+    def route_positions(self) -> list[dict]:
+        """Each waypoint's world position, for drawing the route on a map.
+
+        X is north and Z is east; the mission file names the east axis ``y``.
+        """
+        out = []
+        for point in self._route_points():
+            if point["x"] is None or point["z"] is None:
+                continue
+            out.append(
+                {
+                    "order": point["index"],
+                    "label": point["name"] or POINT_TYPE_LABELS.get(point["type"], point["type"]),
+                    "x": point["x"],
+                    "z": point["z"],
                 }
             )
         return out

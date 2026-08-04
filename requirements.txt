@@ -1,2 +1,2 @@
 Flask>=3.0
-Pillow>=10.0   # IL-2 theatre maps: decodes the game DXT tiles
+Pillow>=10.0   # DCS and IL-2 theatre maps: decodes the games' DXT tiles

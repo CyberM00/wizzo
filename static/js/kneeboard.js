@@ -1257,18 +1257,55 @@ function renderMaps(d) {
     );
   }
 
+  // DCS ships genuine raster aeronautical charts per terrain, with a tile index
+  // that states where each one sits, so the mission's own positions go straight
+  // onto them.
+  if (isDcs(d)) {
+    const map = (d.charts || {}).theatre || {};
+    if (!map.available)
+      return (
+        pageHead("Maps") +
+        `<div class="banner">The theatre chart is unavailable${
+          map.error ? `: ${esc(map.error)}` : "."
+        }</div>`
+      );
+
+    const outline = map.mode === "outline";
+    const legend =
+      '<span class="tag amber">route</span> <span class="tag cyan">airfields</span> ' +
+      (map.spawn ? '<span class="tag green">your start</span> ' : "") +
+      (map.bullseye ? '<span class="tag">bullseye</span>' : "");
+    const scale = outline
+      ? `terrain outline at ${map.source_metres_per_pixel} m per pixel, enlarged`
+      : `${map.metres_per_pixel} m per pixel`;
+
+    return (
+      pageHead("Maps", `${map.name} — ${scale}${map.cached ? "" : ", building on first view"}`) +
+      (outline
+        ? `<div class="banner">This is the terrain's own land and water outline with a
+           latitude and longitude grid over it, not an aeronautical chart.
+           ${esc(map.fallback_reason || "No usable raster chart was found for this terrain")}.
+           Bearing and range from bullseye are listed below for every steerpoint.</div>`
+        : "") +
+      `<div class="row-flow" style="margin-bottom:8px">${legend}</div>` +
+      theatreMapViewer(map) +
+      `<div class="hint" style="margin-top:8px">Drag to pan, scroll to zoom. ${
+        outline
+          ? `The grid and place names are drawn from the terrain's own tables.`
+          : `The chart is stitched from the tiles DCS ships in
+             <code>RasterCharts</code>, placed from the positions its own tile index states.`
+      } Positions come from the mission file, projected with the terrain's own
+      Transverse Mercator frame${projectionNote(map)}.${alignmentNote(map)}</div>` +
+      (outline ? bullseyeTable(map) : "")
+    );
+  }
+
   if (isIl2(d) && !maps.length)
     return (
       pageHead("Maps") +
       '<div class="banner">IL-2 keeps its theatre maps inside packed archives as terrain ' +
       "data rather than as images, so there is nothing to show here. The Charts tab " +
       "carries the taxi diagrams the mission file does record.</div>"
-    );
-  if (isDcs(d) && !maps.length)
-    return (
-      pageHead("Maps") +
-      '<div class="banner">DCS ships no theatre maps as image files, so there is nothing ' +
-      "to show here. The Kneeboard Pages tab carries whatever the mission embedded.</div>"
     );
   if (!maps.length)
     return pageHead("Maps") + '<div class="empty">No maps found in the BMS Docs folder.</div>';
@@ -1289,6 +1326,53 @@ function renderMaps(d) {
     pageHead("Theater Maps", "drag to pan, scroll to zoom") +
     `<div class="chart-list">${buttons}</div>` +
     viewerFor(`/map/${encodeURI(chosen)}`, chosen)
+  );
+}
+
+/** How exactly the terrain's projection was solved, when it was solved at all. */
+function projectionNote(map) {
+  const p = map.projection || {};
+  if (!p.beacons || p.error) return "";
+  return `, solved against the ${p.beacons} beacons the terrain publishes with both
+    a world position and a latitude and longitude (worst residual
+    ${p.residual_max_m} m)`;
+}
+
+/** What the coastline check made of the stitched chart, once it has run. */
+function alignmentNote(map) {
+  const a = map.alignment || {};
+  if (map.mode !== "chart") return "";
+  if (a.checked) {
+    const outcome = {
+      confirmed: "so it is placed where the index says it is",
+      inconclusive: "too close a result to confirm either way",
+      contradicted: "which contradicts the index",
+    }[a.verdict];
+    return ` Its coastline was checked against the terrain's own land and water map
+      after it was built: ${Math.round(a.iou * 100)}% overlap where it is placed,
+      against ${Math.round(a.rival_iou * 100)}% at the best of
+      ${a.candidates} positions ${(a.shift_m / 1000).toFixed(0)} km
+      away&nbsp;&mdash; ${outcome || a.verdict}.`;
+  }
+  if (a.reason) return ` The coastline check could not run: ${esc(a.reason)}.`;
+  return " The coastline check runs the first time the image is built.";
+}
+
+/** Bearing and range from bullseye per steerpoint, for the no-chart fallback. */
+function bullseyeTable(map) {
+  const rows = (map.route || []).filter((p) => p.bullseye);
+  if (!rows.length) return "";
+  return card(
+    "From bullseye",
+    table(
+      ["#", "Steerpoint", "Bearing", "Range"],
+      rows.map((p) => [
+        String(p.order),
+        p.label ? esc(p.label) : "&mdash;",
+        `${String(p.bullseye.bearing).padStart(3, "0")}°`,
+        `${p.bullseye.range_nm} nm`,
+      ])
+    )
   );
 }
 
@@ -1343,12 +1427,53 @@ function theatreMapViewer(map) {
       `<circle cx="${map.spawn.x}" cy="${map.spawn.y}" r="${line}" fill="var(--green)"/>`
     : "";
 
+  // The pieces below only exist when the sim gives them. IL-2 states neither a
+  // bullseye nor a coordinate grid, so its map renders exactly as before.
+  const bull = map.bullseye
+    ? `<circle cx="${map.bullseye.x}" cy="${map.bullseye.y}" r="${unit * 2.6}" fill="none" ` +
+      `stroke="var(--text)" stroke-width="${line}" stroke-opacity="0.8"/>` +
+      `<line x1="${map.bullseye.x - unit * 3.4}" y1="${map.bullseye.y}" x2="${
+        map.bullseye.x + unit * 3.4
+      }" y2="${map.bullseye.y}" stroke="var(--text)" stroke-width="${line * 0.8}"/>` +
+      `<line x1="${map.bullseye.x}" y1="${map.bullseye.y - unit * 3.4}" x2="${
+        map.bullseye.x
+      }" y2="${map.bullseye.y + unit * 3.4}" stroke="var(--text)" stroke-width="${line * 0.8}"/>`
+    : "";
+
+  const grid = (map.graticule || [])
+    .map(
+      (g) =>
+        `<polyline points="${g.points.map((p) => `${p[0]},${p[1]}`).join(" ")}" fill="none" ` +
+        `stroke="var(--border-bright)" stroke-width="${line * 0.6}" stroke-opacity="0.55" ` +
+        `stroke-dasharray="${unit * 1.2} ${unit * 1.2}"/>` +
+        (g.anchor
+          ? `<text x="${g.anchor[0] + unit}" y="${g.anchor[1] - unit * 0.5}" ` +
+            `font-size="${unit * 1.4}" fill="var(--border-bright)" font-family="monospace" ` +
+            `stroke="var(--bg)" stroke-width="${line * 0.9}" paint-order="stroke">${esc(
+              g.label
+            )}</text>`
+          : "")
+    )
+    .join("");
+
+  const places = (map.towns || [])
+    .map(
+      (t) =>
+        `<circle cx="${t.x}" cy="${t.y}" r="${line * 0.9}" fill="var(--text)" fill-opacity="0.7"/>` +
+        `<text x="${t.x + unit * 0.9}" y="${t.y + unit * 0.6}" font-size="${unit * 1.3}" ` +
+        `fill="var(--text)" font-family="monospace" stroke="var(--bg)" ` +
+        `stroke-width="${line * 0.9}" paint-order="stroke">${esc(t.name)}</text>`
+    )
+    .join("");
+
+  const bar = map.scale_bar && map.scale_bar.pixels ? scaleBar(map.scale_bar, unit, line, h) : "";
+
   return `<div class="viewer">
     <div class="pan" data-pan>
       <div class="stage" data-stage style="width:${w}px;height:${h}px">
         <img src="${esc(map.url)}" alt="${esc(map.name)} theatre map" draggable="false">
         <svg class="overlay" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}"
-             xmlns="http://www.w3.org/2000/svg">${bases}${legs}${marks}${spawn}</svg>
+             xmlns="http://www.w3.org/2000/svg">${grid}${places}${bases}${legs}${marks}${spawn}${bull}${bar}</svg>
       </div>
     </div>
     <div class="viewer-bar">
@@ -1358,6 +1483,25 @@ function theatreMapViewer(map) {
       <button data-zoom="1">1:1</button>
     </div>
   </div>`;
+}
+
+/** A scale bar in the map's own pixels, drawn bottom left. */
+function scaleBar(bar, unit, line, height) {
+  const x = unit * 3;
+  const y = height - unit * 4;
+  const tick = unit * 1.2;
+  return (
+    `<rect x="${x - unit}" y="${y - unit * 3}" width="${bar.pixels + unit * 2}" ` +
+    `height="${unit * 5}" fill="var(--bg)" fill-opacity="0.72"/>` +
+    `<line x1="${x}" y1="${y}" x2="${x + bar.pixels}" y2="${y}" stroke="var(--text)" ` +
+    `stroke-width="${line}"/>` +
+    `<line x1="${x}" y1="${y - tick}" x2="${x}" y2="${y + tick}" stroke="var(--text)" ` +
+    `stroke-width="${line}"/>` +
+    `<line x1="${x + bar.pixels}" y1="${y - tick}" x2="${x + bar.pixels}" y2="${y + tick}" ` +
+    `stroke="var(--text)" stroke-width="${line}"/>` +
+    `<text x="${x}" y="${y - unit * 1.5}" font-size="${unit * 1.6}" fill="var(--text)" ` +
+    `font-family="monospace">${esc(bar.label)} / ${esc(bar.nm_label)}</text>`
+  );
 }
 
 function viewerFor(url, rel) {

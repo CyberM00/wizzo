@@ -97,6 +97,55 @@ def il2_map(map_id: str):
     return response
 
 
+DCS_MAP_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,80}$")
+
+
+@app.route("/dcsmap/<map_id>")
+def dcs_map(map_id: str):
+    """Serve a DCS theatre chart, stitching it on first request.
+
+    The id is only ever accepted when it is the one the current payload asked
+    for, so nothing here is reconstructed from user input -- the crop, the
+    terrain and the resolution all come from the board's own state. Stitching
+    decodes a few dozen tiles, so it happens here rather than while the board is
+    built, and the result is cached until the game's own files change.
+    """
+    assert state is not None
+    if not DCS_MAP_ID_RE.match(map_id or ""):
+        abort(404)
+
+    payload = state.get()
+    theatre = ((payload.get("charts") or {}).get("theatre")) or {}
+    if payload.get("sim") != "dcs" or theatre.get("map_id") != map_id:
+        abort(404)
+
+    chart = state.dcs_chart
+    if chart is None or chart.map_id != map_id:
+        abort(404)
+
+    from bmskb.dcs.maps import MapError, load_verdicts, save_verdict
+
+    try:
+        path = chart.build()
+    except MapError as exc:
+        app.logger.warning("DCS chart %s could not be built: %s", map_id, exc)
+        abort(503)
+    # Check it against the terrain's own coastline now that there is something to
+    # check. The verdict is only read on the next build of the board, so a chart
+    # that lands badly is replaced by the honest fallback rather than shown twice.
+    # Once recorded for these game files it is not measured again -- every reload
+    # of the page would otherwise pay for it.
+    stamp = chart.terrain.source_stamp()
+    if (load_verdicts().get(map_id) or {}).get("stamp") != stamp:
+        try:
+            save_verdict(map_id, stamp, chart.alignment())
+        except Exception:  # noqa: BLE001 - a failed self-check must not fail the request
+            app.logger.warning("DCS chart %s could not be checked", map_id)
+    response = send_file(path, mimetype="image/jpeg")
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
 @app.route("/manual/<sim>/<path:relative>")
 def manual_file(sim: str, relative: str):
     """Serve an aircraft manual from a sim's own install.

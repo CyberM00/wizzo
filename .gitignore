@@ -9,3 +9,4 @@ user_settings.json
 *.log
 il2_name_cache.json
 il2_map_cache/
+dcs_map_cache/

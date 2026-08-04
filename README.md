@@ -93,7 +93,7 @@ If an update changes `requirements.txt`, the console says so and you should run
 | **Threats** | Air and surface threat analysis, support assets with TACAN channels |
 | **Weather** | Conditions at takeoff, target and landing |
 | **Charts** | Approach plates auto-selected for your departure, recovery, alternate and target fields; all 89 KTO airfields browsable |
-| **Maps** | BMS: theatre maps. IL-2: the sim's own planner map with your route, waypoints and airfields drawn on it |
+| **Maps** | BMS: theatre maps. DCS: the sim's own raster aeronautical chart for your terrain, cropped to the mission, with your route, waypoints, airfields and bullseye on it. IL-2: the sim's own planner map with your route, waypoints and airfields drawn on it |
 
 Keys `1`–`9` switch pages, `H` opens the sim chooser. `R` forces a reload. `T`
 switches theme.
@@ -189,7 +189,68 @@ containing the mission as a Lua table.
 | **Weather** | Cloud base and thickness, wind at three altitudes, visibility, temperature, QNH |
 | **Charts** | Kneeboard pages the mission generator embedded in the `.miz` (Retribution adds these; stock missions usually do not) |
 | **Threats** | Nothing — see below |
-| **Maps** | Nothing — DCS ships no theatre map images |
+| **Maps** | The terrain's own raster aeronautical chart, cropped to your mission, with the route, numbered waypoints, airfields, your start and bullseye drawn on it |
+
+### The theatre chart
+
+DCS ships real 1:500,000-style aeronautical charts for each terrain — relief, spot
+elevations, airspace boundaries, labelled coastlines — as DXT-compressed tiles in
+`Mods\terrains\<terrain>\RasterCharts`. Two things are needed to put a flight plan
+on them, and the terrain files state both.
+
+**Where each tile sits.** `rasterCharts.sup5` is the scene index for the tiles:
+fixed 344-byte records, each carrying a world bounding box as six floats followed
+by the tile's name. Every record in all three installed terrains parses, and the
+boxes agree with a regular grid to the metre. This is read rather than inferred
+for a reason — Syria's sheets happen to sit on a tidy 262,144 m grid from the
+origin and Caucasus's do not, so anything derived from the tile names would have
+been right on one terrain and wrong on another.
+
+**How mission coordinates map to the world.** `beacons.lua` lists every beacon
+twice over: `position` in world metres and `positionGeo` in latitude and
+longitude. That is enough to solve the projection outright. DCS uses Transverse
+Mercator on WGS 84 at the UTM scale factor 0.9996, with the central meridian of
+the terrain's own UTM zone and a per-terrain false origin:
+
+| Terrain | Central meridian | False northing | False easting | Beacons | Worst residual |
+|---|---|---|---|---|---|
+| Syria | 39°E | −3,879,866 | +282,801 | 151 | 0.07 m |
+| Caucasus | 33°E | −4,998,115 | −99,517 | 164 | 0.79 m |
+| Persian Gulf | 57°E | −2,894,933 | +75,756 | 101 | 0.11 m |
+
+Sub-metre against the sim's own figures, with round-integer offsets and meridians
+exactly on the UTM zone — an exact match rather than a fit. Nothing is hardcoded:
+each terrain is solved from its own beacon table on load, so a terrain never seen
+here works the same way, and the residual is reported on the page.
+
+The whole theatre is never built. Syria at 32 m per pixel would be 390 megapixels,
+so only the tiles covering the route's bounding box plus a 30 km margin are
+stitched, at the finest resolution that covers the box without going over 44
+megapixels. A typical sortie comes out around 5,000 px square, built in about a
+second and cached in a gitignored `dcs_map_cache/` keyed on the game files' own
+modification times. Stitching never happens while the board is being assembled —
+only when the image is actually requested — so `/api/state` stays at 5–20 ms warm.
+
+**Placement is checked, not assumed.** Every terrain also ships
+`MissionGenerator\nodesMap.png`, a land-and-water image exactly georeferenced by
+the bounds beside it. After a chart is stitched, its coastline is compared against
+that image where it is placed and at eight positions 20–35 km away, and the result
+is reported on the page. If a displaced position ever wins, the chart is not shown
+again — the terrain outline is drawn instead and the page says why.
+
+What is *not* done is score the overlap against a fixed threshold. The terrains
+draw their seas quite differently — Syria's is a solid blue, Caucasus's is nearly
+white — so the same colour test finds 52% of one and 12% of another, and a fixed
+threshold rejected a Caucasus chart that visibly lands on its own printed airfield
+symbols. Which position wins is a question that survives a mediocre colour test,
+because both sides of the comparison share it. Measured over twelve coastal areas
+across the three terrains, the stated position won every time.
+
+**When there is no chart.** A terrain with no `RasterCharts` folder, no tile index,
+or no tiles covering the route falls back to that same land-and-water image,
+enlarged, with a latitude and longitude graticule, named places from the terrain's
+own `towns.lua`, a scale bar, and bearing and range from bullseye tabulated for
+every steerpoint. The page says which of the two it is showing and why.
 
 ### What DCS deliberately does not show, and why
 
@@ -211,10 +272,18 @@ empty rather than being invented.
 marks which are a threat to your route. Building a threat brief from that would
 be invention, not reading.
 
-**No waypoint coordinates.** DCS positions are metres in a projection that
-differs per terrain. Converting without the terrain's parameters would produce
-confident nonsense. Leg **distance and bearing** *are* computed, because those
-are valid from the raw offsets.
+**Only the airfields the terrain names are labelled on the map.** Airfield
+positions and names come from the `AIRPORT_HOMER` entries in `beacons.lua`, which
+covers 23 of Syria's 76 airfields. The rest exist only in `AirfieldsTaxiways`, as
+per-airfield binary road-network files whose format is not established here, so
+they are left off rather than drawn as unnamed squares in guessed positions. The
+chart itself prints every airfield regardless — the overlay adds names to the ones
+the sim states, and does not invent the others.
+
+**The chart is shown without a coordinate grid.** In chart mode no graticule or
+place names are drawn, because the chart carries its own and a second set on top
+of them would be two grids to read. The graticule appears only in the fallback,
+where there is no printed one.
 
 **Wind is reported as the direction it comes from.** DCS stores the direction the
 wind blows *toward*, rotated 180° from the convention the Mission Editor
@@ -327,6 +396,7 @@ bmskb/
     install.py            DCS discovery and mission listing
     luaparse.py           parser for the Lua table dialect .miz files use
     mission.py            .miz reader, unit conversion, route geometry
+    maps.py               terrain projection, raster chart index, stitching, cache
     weapons.py            CLSID lookup against the curated library
     source.py             DCS payload assembly
     data/dcs_stores.json  curated F/A-18C, A-10C and AV-8B store reference

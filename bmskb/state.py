@@ -120,6 +120,10 @@ class KneeboardState:
         # needs no equivalent: its taxi charts are drawn inline from coordinates,
         # so nothing has to be served out of a mission file later.
         self.dcs_mission = None
+        # The planned theatre chart for the current DCS mission. Held so the image
+        # route stitches exactly the crop the board asked for, never one rebuilt
+        # from the request.
+        self.dcs_chart = None
 
     # -- settings --------------------------------------------------------
 
@@ -434,6 +438,7 @@ class KneeboardState:
             payload = dcs_source.build(self.dcs, mission_path, self.dcs_weapons)
         except MissionError as exc:
             self.dcs_mission = None
+            self.dcs_chart = None
             return {
                 "sim": "dcs",
                 "ok": False,
@@ -442,6 +447,7 @@ class KneeboardState:
             }
 
         self.dcs_mission = payload.pop("_mission", None)
+        self.dcs_chart = payload.pop("_chart", None)
         payload["laser"] = self._laser_block(payload.get("loadout", {}), sim="dcs")
         for text in self.dcs_weapons.errors:
             payload["warnings"].append({"level": "warn", "text": text})
