@@ -1654,8 +1654,15 @@ function setTab(id) {
   if (id === "home") loadSims().then(renderMain);
 }
 
+/** Name the tab after the sim being shown, so several boards stay tellable apart. */
+function renderTitle() {
+  const sim = activeTab === "home" ? "" : SIM_LABELS[(DATA || {}).sim] || "";
+  document.title = `✈️ Mini Kneeboard${sim ? ` - ${sim}` : ""}`;
+}
+
 function renderMain() {
   const main = document.getElementById("main");
+  renderTitle();
 
   // The chooser must work even when the selected sim has nothing to show --
   // that is exactly when you need to switch to another one.
