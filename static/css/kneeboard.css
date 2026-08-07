@@ -7,25 +7,41 @@
  * Every colour lives in a variable, including the overlay and banner washes, so
  * a theme is a complete palette swap with nothing hardcoded left behind. */
 
+/* Night: a red-lit cockpit. Red light is what you read a paper kneeboard under,
+ * because it is the one colour that does not cost you your dark adaptation.
+ *
+ * That makes the surfaces themselves warm and reddish, which puts the error
+ * state at risk of disappearing into its own background -- so the two are
+ * pulled apart deliberately rather than by eye. Every surface and every step of
+ * the text ramp is held under Lab chroma 16, and all the chroma in the palette
+ * is spent on the three signals. --red carries the most of anything here (78,
+ * against amber's 61), so an error still reads as an alarm on a red page. The
+ * pair that actually needed fixing was --red against --text-dim: they sit 7
+ * degrees apart in hue and would have looked nearly identical, and they are now
+ * 71 deltaE apart because the text ramp gave up its colour instead.
+ *
+ * Contrast on --panel: text 15.6, dim 7.7, faint 4.1, every signal above 5.9. */
 :root {
-  --bg: #080b11;
-  --panel: #111823;
-  --panel-2: #16202e;
-  --border: #263446;
-  --border-bright: #374a63;
-  --text: #dde6f2;
-  --text-dim: #8598b0;
-  --text-faint: #5d6f88;
-  --amber: #ffb340;
-  --green: #52d98a;
-  --red: #ff6b6b;
-  --cyan: #4cc9f0;
-  --violet: #b39ddb;
-  --viewer-bg: #000;
-  --overlay-bg: rgba(8, 11, 17, 0.92);
-  --wash-warn: rgba(255, 179, 64, 0.09);
-  --wash-error: rgba(255, 107, 107, 0.1);
-  --wash-info: rgba(76, 201, 240, 0.08);
+  --bg: #0a0605;
+  --panel: #160e0d;
+  --panel-2: #1f1513;
+  --border: #33211f;
+  --border-bright: #4d3230;
+  --text: #f2e6e1;
+  --text-dim: #b3a19b;
+  --text-faint: #82706b;
+  --amber: #ffb454;
+  --green: #7fd39b;
+  --red: #ff5247;
+  --cyan: #63c7d6;
+  --violet: #c1a2dd;
+  /* Left near-black rather than warmed: approach plates are white, and tinting
+   * what surrounds them changes how their own greys read. */
+  --viewer-bg: #050303;
+  --overlay-bg: rgba(10, 6, 5, 0.93);
+  --wash-warn: rgba(255, 180, 84, 0.1);
+  --wash-error: rgba(255, 82, 71, 0.12);
+  --wash-info: rgba(99, 199, 214, 0.08);
   --mono: "Cascadia Mono", "Consolas", "SFMono-Regular", ui-monospace, monospace;
   --sans: "Inter", "Segoe UI", system-ui, sans-serif;
 }
