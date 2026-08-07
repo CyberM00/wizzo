@@ -1654,10 +1654,12 @@ function setTab(id) {
   if (id === "home") loadSims().then(renderMain);
 }
 
-/** Name the tab after the sim being shown, so several boards stay tellable apart. */
+/** Name the tab after the sim being shown, so several boards stay tellable apart.
+ *
+ * Text only -- the plane is the favicon, which sits right beside this anyway. */
 function renderTitle() {
   const sim = activeTab === "home" ? "" : SIM_LABELS[(DATA || {}).sim] || "";
-  document.title = `✈️ Mini Kneeboard${sim ? ` - ${sim}` : ""}`;
+  document.title = `Mini Kneeboard${sim ? ` - ${sim}` : ""}`;
 }
 
 function renderMain() {
