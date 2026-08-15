@@ -23,15 +23,18 @@ from pathlib import Path
 from flask import Flask, abort, jsonify, render_template, request, send_file
 
 from bmskb import __version__
+from bmskb.desktop import find_port
+from bmskb.desktop import run as desktop_run
+from bmskb.paths import FROZEN, app_root, state_path
 from bmskb.dcs.install import DcsInstall
 from bmskb.il2.gtp import GtpError
 from bmskb.il2.gtp import open_archive as il2_open_archive
 from bmskb.il2.install import Il2Install
 from bmskb.install import BmsInstall
-from bmskb.selfupdate import REEXEC_GUARD, check_and_update, describe
+from bmskb.selfupdate import REEXEC_GUARD, check_and_update, check_release, describe
 from bmskb.state import KneeboardState, validate_laser_code
 
-APP_ROOT = Path(__file__).resolve().parent
+APP_ROOT = app_root()
 
 app = Flask(__name__)
 state: KneeboardState | None = None
@@ -254,8 +257,29 @@ def _lan_address() -> str:
         probe.close()
 
 
+def _start_logging() -> Path | None:
+    """Send console output to a file, since a windowed build has no console.
+
+    Without this, a packaged copy that cannot find a sim -- or cannot bind a
+    port -- fails with nothing to look at. The log is truncated each run so it
+    describes this launch rather than growing forever.
+    """
+    if not FROZEN:
+        return None
+    path = state_path("kneeboard.log")
+    try:
+        stream = open(path, "w", encoding="utf-8", buffering=1)
+    except OSError:
+        return None
+    sys.stdout = stream
+    sys.stderr = stream
+    return path
+
+
 def main() -> int:
     global state, update_info
+
+    log_path = _start_logging()
 
     parser = argparse.ArgumentParser(description="Falcon BMS second-monitor kneeboard")
     parser.add_argument("--host", default="0.0.0.0", help="bind address (default: all interfaces)")
@@ -264,6 +288,19 @@ def main() -> int:
     parser.add_argument("--dcs-path", default=None, help="override the DCS install path")
     parser.add_argument("--il2-path", default=None, help="override the IL-2 install path")
     parser.add_argument("--no-browser", action="store_true", help="do not open a browser")
+    parser.add_argument(
+        "--window",
+        dest="window",
+        action="store_true",
+        default=None,
+        help="show the board in its own window (the default for the packaged build)",
+    )
+    parser.add_argument(
+        "--no-window",
+        dest="window",
+        action="store_false",
+        help="serve only, and use a browser (the default when run from source)",
+    )
     parser.add_argument(
         "--no-update", action="store_true", help="skip the check for a newer version"
     )
@@ -274,15 +311,24 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    print(f"BMS Kneeboard {__version__}")
+    print(f"Mini Kneeboard {__version__}")
+    if log_path:
+        print(f"  log:     {log_path}")
+
+    # A clone fast-forwards itself; a packaged copy has no repo to pull, so it
+    # reports what is available and leaves the swap to the user.
+    def look_for_update(enabled: bool, dry_run: bool = False) -> dict:
+        if FROZEN:
+            return check_release(__version__, enabled=enabled)
+        return check_and_update(APP_ROOT, enabled=enabled, dry_run=dry_run)
 
     if args.check_update:
-        result = check_and_update(APP_ROOT, enabled=True, dry_run=True)
+        result = look_for_update(True, dry_run=True)
         for line in describe(result) or ["  update:  Nothing to report."]:
             print(line)
         return 0
 
-    update_info = check_and_update(APP_ROOT, enabled=not args.no_update)
+    update_info = look_for_update(not args.no_update)
     for line in describe(update_info):
         print(line)
 
@@ -362,17 +408,43 @@ def main() -> int:
     if not install and not dcs and not il2:
         print("  WARNING: no sim was found; the board will have nothing to show.")
 
-    url = f"http://localhost:{args.port}"
+    # A packaged copy is double-clicked, so it cannot fail on a port someone else
+    # already holds. An explicitly requested port is honoured or refused.
+    asked = "--port" in sys.argv
+    port = find_port(args.host, args.port, walk=not asked)
+    if port is None:
+        print(f"  ERROR:   port {args.port} is already in use.")
+        return 1
+    if port != args.port:
+        print(f"  note:    port {args.port} was busy, using {port} instead")
+
+    url = f"http://localhost:{port}"
     print(f"\n  Open {url}")
     lan = _lan_address()
     if lan and args.host == "0.0.0.0":
-        print(f"  On a tablet or phone: http://{lan}:{args.port}")
-    print("  Drag the window to your second monitor and press F11 for fullscreen.\n")
+        print(f"  On a tablet or phone: http://{lan}:{port}")
 
+    def serve():
+        app.run(host=args.host, port=port, debug=False, threaded=True)
+
+    windowed = args.window if args.window is not None else FROZEN
+    if windowed:
+        print("  Opening the board in its own window.\n")
+        # The server keeps running either way -- the window is a front end to it,
+        # not a replacement, so a tablet can still open the same board.
+        failed = desktop_run(url, f"Mini Kneeboard {__version__}", serve, port)
+        if not failed:
+            return 0
+        print(f"  note:    {failed}; opening a browser instead")
+        if not args.no_browser:
+            webbrowser.open(url)
+        serve()
+        return 0
+
+    print("  Drag the window to your second monitor and press F11 for fullscreen.\n")
     if not args.no_browser:
         webbrowser.open(url)
-
-    app.run(host=args.host, port=args.port, debug=False, threaded=True)
+    serve()
     return 0
 
 

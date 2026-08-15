@@ -14,8 +14,12 @@ rewrites history, discards a change, or leaves a merge conflict behind.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import subprocess
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 FETCH_TIMEOUT = 20
@@ -181,8 +185,90 @@ def check_and_update(repo: Path, enabled: bool = True, dry_run: bool = False) ->
     return outcome
 
 
+RELEASES_URL = "https://api.github.com/repos/pokkiee/bms-kneeboard-helper/releases/latest"
+RELEASE_TIMEOUT = 8
+
+
+def _version_tuple(text: str) -> tuple:
+    """Compare versions numerically, so 1.10.0 sorts above 1.9.0."""
+    parts = re.findall(r"\d+", text or "")
+    return tuple(int(p) for p in parts[:4]) or (0,)
+
+
+def check_release(current: str, enabled: bool = True) -> dict:
+    """Ask GitHub whether a newer release exists. Never downloads anything.
+
+    This is the packaged build's update path. It cannot use the git one, because
+    there is no clone to fast-forward -- and swapping a running executable's own
+    folder is exactly the kind of operation that turns a working install into a
+    broken one, so it is deliberately not attempted. The board reports what is
+    available and links to it; the user chooses.
+    """
+    outcome = {
+        "attempted": False,
+        "updated": False,
+        "status": "disabled",
+        "message": "",
+        "behind": 0,
+        "commits": [],
+        "requirements_changed": False,
+        "local_version": current,
+        "latest_version": "",
+        "download_url": "",
+        "notify_only": True,
+    }
+    if not enabled:
+        outcome["message"] = "Update check skipped (--no-update)."
+        return outcome
+
+    outcome["attempted"] = True
+    request = urllib.request.Request(
+        RELEASES_URL,
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "bms-kneeboard"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=RELEASE_TIMEOUT) as response:
+            payload = json.loads(response.read().decode("utf-8", "replace"))
+    except (urllib.error.URLError, OSError, ValueError, TimeoutError) as exc:
+        outcome["status"] = "offline"
+        outcome["message"] = f"Could not reach GitHub to check for updates ({exc})."
+        return outcome
+
+    tag = str(payload.get("tag_name") or "").strip()
+    outcome["latest_version"] = tag.lstrip("vV")
+    outcome["download_url"] = str(payload.get("html_url") or "")
+
+    if not tag:
+        outcome["status"] = "offline"
+        outcome["message"] = "GitHub returned no release to compare against."
+        return outcome
+
+    if _version_tuple(outcome["latest_version"]) <= _version_tuple(current):
+        outcome["status"] = "up-to-date"
+        outcome["message"] = f"Running the latest version ({current})."
+        return outcome
+
+    outcome["status"] = "available"
+    outcome["message"] = (
+        f"Version {outcome['latest_version']} is available -- you have {current}."
+    )
+    body = str(payload.get("body") or "")
+    outcome["commits"] = [
+        line.lstrip("-* ").strip()
+        for line in body.splitlines()
+        if line.strip().startswith(("-", "*"))
+    ][:6]
+    return outcome
+
+
 def describe(outcome: dict) -> list[str]:
     """Console lines summarising an update attempt."""
+    if outcome.get("notify_only") and outcome["status"] == "available":
+        return [
+            f"  update:  {outcome['message']}",
+            f"           Download it from {outcome['download_url']}",
+        ]
+
     lines: list[str] = []
     if outcome["status"] in ("updated", "available"):
         lines.append(f"  update:  {outcome['message']}")

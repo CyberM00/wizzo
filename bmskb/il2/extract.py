@@ -29,10 +29,11 @@ import time
 from pathlib import Path
 
 from .gtp import GtpError, open_archive
+from ..paths import state_path
 
 # 2: added the per-aircraft technical notes.
 CACHE_SCHEMA = 2
-CACHE_PATH = Path(__file__).parent.parent.parent / "il2_name_cache.json"
+CACHE_PATH = state_path("il2_name_cache.json")
 
 PLANE_MEMBER_RE = re.compile(r"/luascripts/worldobjects/planes/[a-z0-9_]+\.txt$")
 LOCALE_MEMBER_RE = re.compile(r"/swf/il2/ammunition/ammunition\.locale=\w+\.txt$")

@@ -28,8 +28,9 @@ from .il2.reference import Il2Reference
 from .il2.weapons import Il2WeaponLibrary
 from .install import BmsInstall
 from .weapons import DATA_DIR, WeaponLibrary
+from .paths import state_path
 
-SETTINGS_PATH = Path(__file__).parent.parent / "user_settings.json"
+SETTINGS_PATH = state_path("user_settings.json")
 
 TIMESTAMP_FORMATS = (
     "%m/%d/%Y %H:%M:%S",

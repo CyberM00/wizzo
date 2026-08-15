@@ -27,8 +27,9 @@ import re
 from pathlib import Path
 
 from .gtp import GtpError, open_archive
+from ..paths import state_path
 
-CACHE_DIR = Path(__file__).parent.parent.parent / "il2_map_cache"
+CACHE_DIR = state_path("il2_map_cache")
 
 # Level "02" is the middle of the three the game ships: twice the base grid, so
 # 45 m per pixel on the theatres measured, which resolves rivers, coastlines and

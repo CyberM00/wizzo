@@ -1878,6 +1878,12 @@ document.addEventListener("keydown", (e) => {
   const index = parseInt(e.key, 10);
   if (index >= 1 && index <= PAGE_TABS.length) setTab(PAGE_TABS[index - 1].id);
   if (e.key === "h" || e.key === "H") setTab("home");
+  // In the packaged build there is no browser to handle F11, so the page asks
+  // the window to do it. In a browser this branch never runs.
+  if (e.key === "F11" && window.pywebview && window.pywebview.api) {
+    e.preventDefault();
+    window.pywebview.api.toggle_fullscreen();
+  }
   if (e.key === "r" || e.key === "R") load(true);
   if (e.key === "t" || e.key === "T") applyTheme(themeNow() === "day" ? "night" : "day");
 });

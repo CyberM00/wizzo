@@ -43,8 +43,9 @@ import struct
 import threading
 import zipfile
 from pathlib import Path
+from ..paths import state_path
 
-CACHE_DIR = Path(__file__).parent.parent.parent / "dcs_map_cache"
+CACHE_DIR = state_path("dcs_map_cache")
 
 JPEG_QUALITY = 86
 

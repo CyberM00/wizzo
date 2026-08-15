@@ -28,6 +28,29 @@ exactly what carries over.
 
 ## Running it
 
+### The download
+
+Grab the zip from [Releases](https://github.com/pokkiee/bms-kneeboard-helper/releases),
+unzip it anywhere, and run **`MiniKneeboard.exe`**. No Python, no `pip`, no
+console — the board opens in its own window.
+
+About 20 MB to download, 39 MB unpacked. It writes nothing into its own folder:
+settings, the map caches and a log go to `%LOCALAPPDATA%\Kneeboard`, so the app
+folder can sit anywhere, including somewhere read-only, and deleting it leaves
+nothing behind but that one directory.
+
+Windows will probably say the publisher is unrecognised. That is because the
+executable is not code-signed, which costs a few hundred dollars a year — not
+because anything is wrong with it. Choose *More info* then *Run anyway*, or build
+it yourself from source with `python packaging/build.py`.
+
+The window is the same board a browser shows, and the server is still running
+behind it, so a tablet or phone on the same network can open the address printed
+in `%LOCALAPPDATA%\Kneeboard\kneeboard.log`. **F11** goes fullscreen in the
+window just as it does in a browser.
+
+### From source
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -39,6 +62,10 @@ python kneeboard.py
 Then drag the browser window to your second monitor and press **F11**.
 
 On Windows you can also just double-click **`start-kneeboard.bat`**.
+
+Run from source the board serves and opens a browser, as it always has. Pass
+`--window` to get the packaged build's desktop window instead, or `--no-window`
+in a packaged build to go back to a browser.
 
 The BMS install is found automatically from the registry. If that fails, point at
 it explicitly:
@@ -55,7 +82,14 @@ Other options: `--port` (default 5000), `--host`, `--no-browser`, `--no-update`,
 
 ## Keeping it up to date
 
-The board updates itself. On every start it checks GitHub, fast-forwards the
+**The packaged build tells you, and lets you decide.** On start it asks GitHub
+for the latest release, and if it is newer than what you are running the sidebar
+says so with a link. It does not download or replace anything by itself: swapping
+a running application's own folder is exactly the operation that turns a working
+install into a broken one, and a kneeboard that fails to open before a sortie is
+worse than one that is a version behind.
+
+**A git clone updates itself.** On every start it checks GitHub, fast-forwards the
 working copy if there is something new, and relaunches on the updated version
 before serving anything. Push a change from anywhere — including Claude Code on
 web from a phone — and the next launch on the desktop picks it up.
@@ -411,11 +445,18 @@ bmskb/
     weapons.py            payload lookup with honest unknowns
     mission.py            mission reader, route geometry, unit conversion
     source.py             IL-2 payload assembly, career and campaign
+  paths.py                bundled resources vs the writable state folder
+  desktop.py              free-port selection and the native window
 templates/index.html      page shell
 static/css, static/js     styling and renderer
+packaging/
+  build.py                builds and zips the double-click package
+  kneeboard.spec          PyInstaller spec
+  make_icon.py            renders the .ico from the favicon's own path
 ```
 
-Only dependency is Flask.
+Flask and Pillow to run from source; PyInstaller and pywebview only to build the
+package.
 
 ## Theatres other than Korea
 
