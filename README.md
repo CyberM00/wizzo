@@ -422,3 +422,7 @@ Only dependency is Flask.
 The briefing, loadout, comms and weather pages are theatre-independent. The chart
 and map pages read whatever is in your `Docs` tree, matching on ICAO and airfield
 name, so a theatre that follows the same `Docs` layout works without changes.
+
+## Support
+
+If this saved you time, you can [buy me a coffee](https://ko-fi.com/cyberm00).
