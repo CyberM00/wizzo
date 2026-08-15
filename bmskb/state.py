@@ -27,6 +27,7 @@ from .il2.mission import MissionError as Il2MissionError
 from .il2.reference import Il2Reference
 from .il2.weapons import Il2WeaponLibrary
 from .install import BmsInstall
+from . import simpaths
 from .weapons import DATA_DIR, WeaponLibrary
 from .paths import state_path
 
@@ -45,6 +46,14 @@ DEFAULT_SETTINGS = {
     # "auto" follows whichever sim wrote a mission most recently; naming one pins
     # the board to it.
     "sim": "auto",
+    # Where each game lives. "" means find it automatically, "off" means the user
+    # says they do not have it. Anything else is a folder they chose.
+    "bms_path": "",
+    "dcs_path": "",
+    "il2_path": "",
+    # Set once the setup panel has been dismissed, so it only appears unbidden
+    # on a first run.
+    "setup_done": "",
 }
 
 VALID_SIMS = ("auto", "bms", "dcs", "il2")
@@ -90,11 +99,31 @@ class KneeboardState:
         install: BmsInstall | None,
         dcs: DcsInstall | None = None,
         il2: Il2Install | None = None,
+        cli_paths: dict | None = None,
     ):
+        self.lock = threading.Lock()
+        # Kept so the installs can be rebuilt when the user points the board at a
+        # different folder: a path given on the command line still outranks one
+        # saved in the board, even after the saved one changes.
+        self.cli_paths = dict(cli_paths or {})
+        self.settings = self._load_settings()
+        self._attach(install, dcs, il2)
+
+    def _attach(
+        self,
+        install: BmsInstall | None,
+        dcs: DcsInstall | None,
+        il2: Il2Install | None,
+    ) -> None:
+        """Point the board at these installs and rebuild everything derived.
+
+        Every library here is built from an install path, so changing where a
+        game lives means building them again -- and dropping the cached payload,
+        which describes a mission read out of the old one.
+        """
         self.install = install
         self.dcs = dcs
         self.il2 = il2
-        self.lock = threading.Lock()
         self.payload: dict | None = None
         self.signature: tuple | None = None
         self.weapons = WeaponLibrary(install.wcd_file if install else None)
@@ -116,7 +145,6 @@ class KneeboardState:
             install.charts_dir if install else None,
             install.maps_dir if install else None,
         )
-        self.settings = self._load_settings()
         # Kept so the mission archive can be served without reopening it. IL-2
         # needs no equivalent: its taxi charts are drawn inline from coordinates,
         # so nothing has to be served out of a mission file later.
@@ -126,9 +154,71 @@ class KneeboardState:
         # from the request.
         self.dcs_chart = None
 
+    # -- where the sims are ----------------------------------------------
+
+    @staticmethod
+    def discover_all(cli_paths: dict | None, settings: dict) -> tuple:
+        """Find all three sims, honouring the command line and saved folders.
+
+        A sim marked as not installed is skipped rather than searched for, which
+        also stops the drive scan its discovery would otherwise run.
+        """
+        finders = {"bms": BmsInstall, "dcs": DcsInstall, "il2": Il2Install}
+        found = {}
+        for sim, finder in finders.items():
+            override = simpaths.override_for(sim, cli_paths, settings)
+            if override == simpaths.NOT_INSTALLED:
+                found[sim] = None
+                continue
+            try:
+                found[sim] = finder.discover(override)
+            except Exception:  # noqa: BLE001 - a bad path must not stop the board
+                found[sim] = None
+        return found["bms"], found["dcs"], found["il2"]
+
+    def sim_paths(self) -> dict:
+        """The setup panel's view: one row per sim, plus whether to show it."""
+        installs = {"bms": self.install, "dcs": self.dcs, "il2": self.il2}
+        rows = [
+            simpaths.describe(sim, self.cli_paths, self.settings, installs[sim])
+            for sim in simpaths.SIMS
+        ]
+        return {
+            "sims": rows,
+            # Shown unprompted the first time, and whenever nothing was found at
+            # all -- that second case is exactly when the board is useless and
+            # the reason is a path.
+            "first_run": self.settings.get("setup_done") != "1",
+            "none_found": not any(row["found"] for row in rows),
+            "can_browse": False,
+        }
+
+    def set_sim_path(self, sim: str, value: str) -> tuple[bool, str]:
+        """Save where a sim lives, then rebuild the board around it."""
+        if sim not in simpaths.SIMS:
+            return False, f"{sim} is not a sim this board reads."
+        value = str(value or "").strip().strip('"')
+        if value not in (simpaths.AUTO, simpaths.NOT_INSTALLED):
+            ok, why = simpaths.verify(sim, value)
+            if not ok:
+                return False, why
+
+        with self.lock:
+            self.settings[simpaths.SETTING_KEYS[sim]] = value
+            self._save_settings()
+            self._attach(*self.discover_all(self.cli_paths, self.settings))
+        return True, ""
+
+    def finish_setup(self) -> None:
+        with self.lock:
+            self.settings["setup_done"] = "1"
+            self._save_settings()
+
     # -- settings --------------------------------------------------------
 
-    def _load_settings(self) -> dict:
+    @staticmethod
+    def load_settings_file() -> dict:
+        """The saved settings, readable before a board exists to hold them."""
         settings = dict(DEFAULT_SETTINGS)
         try:
             settings.update(json.loads(SETTINGS_PATH.read_text(encoding="utf-8")))
@@ -136,23 +226,35 @@ class KneeboardState:
             pass
         return settings
 
+    def _load_settings(self) -> dict:
+        return self.load_settings_file()
+
+    def _save_settings(self) -> None:
+        """Write the settings file. The caller holds the lock."""
+        try:
+            SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            SETTINGS_PATH.write_text(
+                json.dumps(self.settings, indent=2), encoding="utf-8"
+            )
+        except OSError:
+            pass
+
     def update_settings(self, changes: dict) -> dict:
         with self.lock:
             sim_changed = False
             for key in DEFAULT_SETTINGS:
                 if key in changes:
+                    # Install folders have their own endpoint: they need checking
+                    # against the disk and they rebuild the board when they change.
+                    if key in simpaths.SETTING_KEYS.values():
+                        continue
                     value = str(changes[key])
                     if key == "sim":
                         if value not in VALID_SIMS:
                             continue
                         sim_changed = value != self.settings.get("sim")
                     self.settings[key] = value
-            try:
-                SETTINGS_PATH.write_text(
-                    json.dumps(self.settings, indent=2), encoding="utf-8"
-                )
-            except OSError:
-                pass
+            self._save_settings()
             if sim_changed:
                 # Switching sim changes the whole board, not just a panel.
                 self.payload = None
@@ -403,23 +505,31 @@ class KneeboardState:
         sim, mission_path = self.choose_sim()
         builders = {"dcs": self._build_dcs, "il2": self._build_il2}
         builder = builders.get(sim)
+        # A pinned sim wins even when it has nothing to show, so the board can be
+        # pinned to one that is not installed at all -- by marking it as such, or
+        # by uninstalling it. The builders all read the install, so that has to be
+        # caught here rather than inside them.
+        installs = {"dcs": self.dcs, "il2": self.il2}
+        missing = builder is not None and installs.get(sim) is None
         # IL-2 is called even without a loose mission: a scripted campaign has no
         # mission file on disk and is resolved through the sortie log instead.
-        if builder is not None and (mission_path is not None or sim == "il2"):
+        if builder is not None and not missing and (mission_path is not None or sim == "il2"):
             payload = builder(mission_path)
         elif builder is not None:
+            label = {"dcs": "DCS World", "il2": "IL-2 Great Battles"}[sim]
+            text = (
+                f"The board is pinned to {label}, but no installation of it was "
+                "found. Point the board at its folder on the Home page, or switch "
+                "sim with the button under the nav."
+                if missing
+                else f"The board is pinned to {label} but no mission was found for "
+                "it. Fly a mission, or switch sim with the button under the nav."
+            )
             payload = {
                 "sim": sim,
                 "ok": False,
                 "install": None,
-                "warnings": [
-                    {
-                        "level": "error",
-                        "text": f"The board is pinned to {sim.upper()} but no mission was "
-                        "found for it. Fly a mission, or switch sim with the button "
-                        "under the nav.",
-                    }
-                ],
+                "warnings": [{"level": "error", "text": text}],
             }
         else:
             payload = self._build_bms()

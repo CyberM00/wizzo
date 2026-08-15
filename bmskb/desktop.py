@@ -71,6 +71,31 @@ def wait_until_serving(port: int, timeout: float = READY_TIMEOUT) -> bool:
     return False
 
 
+def browse_available() -> bool:
+    """Whether a folder picker can be shown, i.e. whether a window is up."""
+    try:
+        import webview
+    except ImportError:
+        return False
+    return bool(getattr(webview, "windows", None))
+
+
+def browse_for_folder(title: str) -> str:
+    """Ask the user for a folder. Empty string if they cancel or cannot be asked."""
+    if not browse_available():
+        return ""
+    import webview
+
+    try:
+        chosen = webview.windows[0].create_file_dialog(webview.FOLDER_DIALOG)
+    except Exception:  # noqa: BLE001 - a cancelled or unavailable dialog is not an error
+        return ""
+    if not chosen:
+        return ""
+    # Older versions hand back a tuple, newer ones a list; both hold one entry.
+    return str(chosen[0]) if isinstance(chosen, (list, tuple)) else str(chosen)
+
+
 def available() -> tuple[bool, str]:
     """Whether a native window can be shown here, and why not if it cannot."""
     try:

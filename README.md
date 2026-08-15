@@ -67,15 +67,40 @@ Run from source the board serves and opens a browser, as it always has. Pass
 `--window` to get the packaged build's desktop window instead, or `--no-window`
 in a packaged build to go back to a browser.
 
-The BMS install is found automatically from the registry. If that fails, point at
-it explicitly:
+## Where your games are
+
+All three are found automatically — BMS from the registry, DCS from the registry,
+IL-2 from Steam's own library list, each falling back to a scan of the usual
+folders. Most people never have to think about it.
+
+When that misses, the board asks. The first time it runs it shows a **Game
+folders** panel listing what it found, what it did not, and a box for each one.
+After that the panel is behind **Change game folders** on the Home page, and it
+reappears by itself if nothing at all was found — an empty board is almost always
+a path.
+
+Each row can be pointed at a folder, set back to **Find it** automatically, or
+marked **Not installed** so the board stops looking for a game you do not own.
+Changes take effect immediately; there is nothing to restart. In the downloadable
+app there is a **Browse…** button with a real folder picker — a browser cannot be
+given one, so there it is a text box.
+
+A folder is checked before it is accepted, against files the board actually
+reads: `Data\TerrData` for BMS, `Mods\terrains` for DCS, `data\Swf.gtp` for IL-2.
+Pointing at the wrong game is rejected with the reason rather than accepted and
+turned into an empty board — the obvious markers (`Data`, `bin`, `data`) are
+shared by all three, and checking those accepted a DCS folder as BMS and accepted
+IL-2 Sturmovik 1946, a different game from 2006, as IL-2 Great Battles.
+
+From the command line, and taking priority over anything saved:
 
 ```bash
 python kneeboard.py --bms-path "D:\Falcon BMS 4.38"
 ```
 
-DCS and IL-2 are found the same way, and can be pointed at with `--dcs-path` and
-`--il2-path`.
+`--dcs-path` and `--il2-path` do the same, as do the `BMS_PATH`, `DCS_PATH` and
+`IL2_PATH` environment variables. Order is command line, environment, what you
+saved in the board, then automatic discovery.
 
 Other options: `--port` (default 5000), `--host`, `--no-browser`, `--no-update`,
 `--check-update` (report whether an update is waiting, then exit).
@@ -446,7 +471,8 @@ bmskb/
     mission.py            mission reader, route geometry, unit conversion
     source.py             IL-2 payload assembly, career and campaign
   paths.py                bundled resources vs the writable state folder
-  desktop.py              free-port selection and the native window
+  desktop.py              free-port selection, the native window, folder picker
+  simpaths.py             where each sim is installed, and checking it really is
 templates/index.html      page shell
 static/css, static/js     styling and renderer
 packaging/

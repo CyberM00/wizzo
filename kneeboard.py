@@ -23,7 +23,7 @@ from pathlib import Path
 from flask import Flask, abort, jsonify, render_template, request, send_file
 
 from bmskb import __version__
-from bmskb.desktop import find_port
+from bmskb.desktop import browse_available, browse_for_folder, find_port
 from bmskb.desktop import run as desktop_run
 from bmskb.paths import FROZEN, app_root, state_path
 from bmskb.dcs.install import DcsInstall
@@ -175,6 +175,51 @@ def api_token():
     """Cheap freshness probe -- the page polls this and reloads on change."""
     assert state is not None
     return jsonify({"token": state.token()})
+
+
+@app.route("/api/paths")
+def api_paths():
+    """Where each sim is installed, and where the board looked."""
+    assert state is not None
+    payload = state.sim_paths()
+    payload["can_browse"] = browse_available()
+    return jsonify(payload)
+
+
+@app.route("/api/paths", methods=["POST"])
+def api_set_path():
+    """Point the board at a sim, or tell it a sim is not installed.
+
+    The board rebuilds around the new folder rather than asking to be restarted,
+    because "restart the app" is the kind of instruction that gets a bug report
+    instead of a restart.
+    """
+    assert state is not None
+    payload = request.get_json(silent=True) or {}
+
+    if payload.get("done"):
+        state.finish_setup()
+        return jsonify({"ok": True, **state.sim_paths(), "can_browse": browse_available()})
+
+    sim = str(payload.get("sim", ""))
+    if "path" not in payload:
+        return jsonify({"ok": False, "error": "No folder given."}), 400
+    ok, error = state.set_sim_path(sim, str(payload.get("path", "")))
+    if not ok:
+        return jsonify({"ok": False, "error": error}), 400
+    return jsonify({"ok": True, **state.sim_paths(), "can_browse": browse_available()})
+
+
+@app.route("/api/browse", methods=["POST"])
+def api_browse():
+    """Open a folder picker, when running in the packaged window.
+
+    A browser cannot be asked to pick a folder and hand back its path, so this
+    only works in the desktop build; the page shows a plain text box otherwise.
+    """
+    payload = request.get_json(silent=True) or {}
+    chosen = browse_for_folder(str(payload.get("title", "Select the game folder")))
+    return jsonify({"ok": bool(chosen), "path": chosen})
 
 
 @app.route("/api/settings", methods=["POST"])
@@ -349,10 +394,12 @@ def main() -> int:
             print(f"  NOTE:    could not restart automatically ({exc}).")
             print("           The update applies the next time you start the board.\n")
 
-    install = BmsInstall.discover(args.bms_path)
-    dcs = DcsInstall.discover(args.dcs_path)
-    il2 = Il2Install.discover(args.il2_path)
-    state = KneeboardState(install, dcs, il2)
+    # Discovery has to see the saved folders, so the settings are read before the
+    # sims are looked for rather than after.
+    cli_paths = {"bms": args.bms_path, "dcs": args.dcs_path, "il2": args.il2_path}
+    saved = KneeboardState.load_settings_file()
+    install, dcs, il2 = KneeboardState.discover_all(cli_paths, saved)
+    state = KneeboardState(install, dcs, il2, cli_paths=cli_paths)
 
     if install:
         print(f"  BMS {install.version} at {install.base}")

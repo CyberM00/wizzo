@@ -25,6 +25,10 @@ let DATA = null;
 // this cannot pull you back to Home mid-flight.
 let activeTab = "home";
 let SIMS = null;
+// Where each sim is installed. Fetched alongside the chooser, because that is
+// the only page that shows it.
+let PATHS = null;
+let SHOW_SETUP = false;
 let lastToken = null;
 const viewerChoice = {};
 
@@ -137,9 +141,77 @@ const pageHead = (title, note = "") =>
 
 /* ---------------------------------------------------------------- home */
 
+/** Where each sim is installed: shown on a first run, and on demand after. */
+function renderSetup() {
+  const p = PATHS || {};
+  const rows = (p.sims || [])
+    .map((s) => {
+      const off = s.saved === "off";
+      const tag = off
+        ? '<span class="tag">not installed</span>'
+        : s.found
+        ? '<span class="tag green">found</span>'
+        : '<span class="tag red">not found</span>';
+      const where = s.source === "found" ? "automatically" : `from the ${esc(s.source)}`;
+      const browse = p.can_browse
+        ? `<button class="link-btn path-browse" data-sim="${esc(s.sim)}">Browse&hellip;</button>`
+        : "";
+      return `<tr data-row="${esc(s.sim)}">
+        <td style="white-space:nowrap"><b>${esc(s.label)}</b><br>${tag}</td>
+        <td style="width:100%">
+          <input type="text" class="path-input" data-sim="${esc(s.sim)}"
+                 value="${esc(off ? "" : s.path)}" ${s.locked ? "disabled" : ""}
+                 placeholder="leave empty to find it automatically"
+                 style="width:100%;font-family:var(--mono);font-size:12px">
+          <div class="hint" style="margin-top:4px">${esc(s.note)}${
+            s.found && !off ? ` &middot; found ${where}` : ""
+          }</div>
+          <div class="hint path-error" data-sim="${esc(s.sim)}"
+               style="margin-top:4px;color:var(--red);display:none"></div>
+        </td>
+        <td style="white-space:nowrap;text-align:right">
+          ${s.locked ? '<span class="hint">fixed for this run</span>' : `
+            ${browse}
+            <button class="link-btn path-save" data-sim="${esc(s.sim)}">Save</button>
+            <button class="link-btn path-auto" data-sim="${esc(s.sim)}">Find it</button>
+            <button class="link-btn path-off" data-sim="${esc(s.sim)}">Not installed</button>`}
+        </td>
+      </tr>`;
+    })
+    .join("");
+
+  const intro = p.first_run
+    ? "Tell the board where your games are. It has already looked in the usual " +
+      "places, so this is only needed for anything it did not find."
+    : "The board found these by itself. Change one if a game lives somewhere " +
+      "unusual, or if you moved it.";
+
+  return card(
+    "Game folders",
+    `<div class="hint" style="margin-bottom:10px">${intro}</div>` +
+      `<table class="data"><tbody>${rows}</tbody></table>` +
+      (p.can_browse
+        ? ""
+        : '<div class="hint" style="margin-top:8px">Type or paste a folder path. ' +
+          "The downloadable app has a folder picker; a browser cannot be given one.</div>") +
+      (p.first_run
+        ? '<div style="margin-top:12px"><button class="link-btn" id="setup-done" ' +
+          'style="border-color:var(--amber);color:var(--amber)">Done</button></div>'
+        : "")
+  );
+}
+
 /** The landing page: pick which sim to read. */
 function renderHome() {
   if (!SIMS) return pageHead("Choose a sim") + '<div class="empty">Checking your installs&hellip;</div>';
+
+  // On a first run, and whenever nothing was found at all, the folders matter
+  // more than the chooser does -- an empty board is almost always a path.
+  const p = PATHS || {};
+  const setupFirst = p.first_run || p.none_found;
+  const setupPanel = SHOW_SETUP || setupFirst
+    ? `<div class="grid" style="margin-bottom:12px">${renderSetup()}</div>`
+    : "";
 
   const cards = SIMS.map((s) => {
     const state = !s.found
@@ -181,14 +253,110 @@ function renderHome() {
   const anyReady = SIMS.some((s) => s.ready);
   return (
     pageHead("Choose a sim", anyReady ? "" : "no missions found in any sim yet") +
+    setupPanel +
     `<div class="grid c3">${cards}</div>` +
     `<div class="grid" style="margin-top:12px">${card(
       "",
       '<div class="hint">Pinning a sim here keeps the board on it. To follow whichever sim ' +
         "wrote a mission most recently instead, use the button below the nav until it reads " +
-        "<b>(auto)</b>.</div>"
+        "<b>(auto)</b>.</div>" +
+        (setupPanel
+          ? ""
+          : '<div style="margin-top:10px"><button class="link-btn" id="setup-open">' +
+            "Change game folders</button></div>")
     )}</div>`
   );
+}
+
+/** Wire the setup panel. Called after the home page renders. */
+function wireSetup(host) {
+  const open = host.querySelector("#setup-open");
+  if (open)
+    open.addEventListener("click", () => {
+      SHOW_SETUP = true;
+      renderMain();
+    });
+
+  const done = host.querySelector("#setup-done");
+  if (done)
+    done.addEventListener("click", async () => {
+      await postPath({ done: true });
+      SHOW_SETUP = false;
+      await loadSims();
+      renderMain();
+    });
+
+  const send = async (sim, value) => {
+    const box = host.querySelector(`.path-error[data-sim="${sim}"]`);
+    if (box) box.style.display = "none";
+    const result = await postPath({ sim, path: value });
+    if (!result.ok) {
+      if (box) {
+        box.textContent = result.error || "That folder could not be used.";
+        box.style.display = "";
+      }
+      return;
+    }
+    // The board is now reading a different install, so the chooser and the
+    // payload both have to be rebuilt, not just this panel.
+    SHOW_SETUP = true;
+    await loadSims();
+    await load(true).catch(() => {});
+    renderMain();
+  };
+
+  host.querySelectorAll(".path-save").forEach((b) =>
+    b.addEventListener("click", () =>
+      send(b.dataset.sim, host.querySelector(`.path-input[data-sim="${b.dataset.sim}"]`).value)
+    )
+  );
+  host.querySelectorAll(".path-auto").forEach((b) =>
+    b.addEventListener("click", () => send(b.dataset.sim, ""))
+  );
+  host.querySelectorAll(".path-off").forEach((b) =>
+    b.addEventListener("click", () => send(b.dataset.sim, "off"))
+  );
+  host.querySelectorAll(".path-input").forEach((input) =>
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") send(input.dataset.sim, input.value);
+    })
+  );
+  host.querySelectorAll(".path-browse").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const label = (PATHS.sims.find((s) => s.sim === b.dataset.sim) || {}).label || "";
+      const res = await fetch("/api/browse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: `Select the ${label} folder` }),
+      })
+        .then((r) => r.json())
+        .catch(() => ({ ok: false }));
+      if (res.ok && res.path) send(b.dataset.sim, res.path);
+    })
+  );
+}
+
+async function postPath(body) {
+  try {
+    const res = await fetch("/api/paths", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (data.sims) PATHS = data;
+    return data;
+  } catch (e) {
+    return { ok: false, error: "The board could not be reached." };
+  }
+}
+
+async function loadPaths() {
+  try {
+    PATHS = await (await fetch("/api/paths")).json();
+  } catch (e) {
+    PATHS = { sims: [], first_run: false, none_found: false, can_browse: false };
+  }
 }
 
 /** Pin a sim and go straight to its brief. */
@@ -1651,7 +1819,7 @@ function setTab(id) {
   renderMain();
   // Refresh the chooser's status each time it is opened, so it never shows a
   // stale "no mission" after you have flown one.
-  if (id === "home") loadSims().then(renderMain);
+  if (id === "home") Promise.all([loadSims(), loadPaths()]).then(renderMain);
 }
 
 /** Name the tab after the sim being shown, so several boards stay tellable apart.
@@ -1674,6 +1842,7 @@ function renderMain() {
     main.querySelectorAll(".sim-enter").forEach((btn) =>
       btn.addEventListener("click", () => enterSim(btn.dataset.sim))
     );
+    wireSetup(main);
     return;
   }
 
@@ -1895,7 +2064,7 @@ document.getElementById("sim-btn").addEventListener("click", cycleSim);
 
 applyTheme(themeNow());
 renderNav();
-loadSims().then(renderMain);
+Promise.all([loadSims(), loadPaths()]).then(renderMain);
 load().catch(() => {
   document.getElementById("main").innerHTML =
     '<div class="empty">Could not reach the kneeboard server.</div>';
