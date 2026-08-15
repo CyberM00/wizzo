@@ -185,7 +185,11 @@ def check_and_update(repo: Path, enabled: bool = True, dry_run: bool = False) ->
     return outcome
 
 
-RELEASES_URL = "https://api.github.com/repos/pokkiee/bms-kneeboard-helper/releases/latest"
+# One place, because the account has been renamed once already and three copies
+# of it drifted apart the moment it happened.
+REPO = "CyberM00/bms-kneeboard-helper"
+REPO_URL = f"https://github.com/{REPO}"
+RELEASES_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASE_TIMEOUT = 8
 
 

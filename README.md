@@ -30,7 +30,7 @@ exactly what carries over.
 
 ### The download
 
-Grab the zip from [Releases](https://github.com/pokkiee/bms-kneeboard-helper/releases),
+Grab the zip from [Releases](https://github.com/CyberM00/bms-kneeboard-helper/releases),
 unzip it anywhere, and run **`MiniKneeboard.exe`**. No Python, no `pip`, no
 console — the board opens in its own window.
 

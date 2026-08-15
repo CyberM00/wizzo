@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from bmskb import __version__  # noqa: E402
+from bmskb.selfupdate import REPO_URL  # noqa: E402
 
 
 def run(*args: str) -> None:
@@ -62,8 +63,8 @@ def main() -> int:
         "log file, in %LOCALAPPDATA%\\Kneeboard\\kneeboard.log\n\n"
         "Windows may warn that the publisher is unrecognised. That is because\n"
         "the executable is not code-signed, not because anything is wrong with\n"
-        "it. Source: https://github.com/pokkiee/bms-kneeboard-helper\n".format(
-            v=__version__, rule="=" * (16 + len(__version__))
+        "it. Source: {repo}\n".format(
+            v=__version__, rule="=" * (16 + len(__version__)), repo=REPO_URL
         ),
         encoding="utf-8",
     )
