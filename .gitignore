@@ -12,4 +12,5 @@ il2_map_cache/
 dcs_map_cache/
 build/
 dist/
-packaging/kneeboard.ico
+packaging/wizzo.ico
+dcs_clsid_names.json
