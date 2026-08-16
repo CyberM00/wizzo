@@ -2,8 +2,8 @@
 
     python packaging/build.py
 
-Produces ``dist/MiniKneeboard-<version>-win64.zip``, containing a folder the
-user unzips anywhere and runs ``MiniKneeboard.exe`` from. No Python, no pip.
+Produces ``dist/Wizzo-<version>-win64.zip``, containing a folder the
+user unzips anywhere and runs ``Wizzo.exe`` from. No Python, no pip.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def run(*args: str) -> None:
 
 
 def main() -> int:
-    print(f"Building Mini Kneeboard {__version__}")
+    print(f"Building Wizzo {__version__}")
 
     for stale in (ROOT / "build", ROOT / "dist"):
         if stale.exists():
@@ -41,26 +41,26 @@ def main() -> int:
         "--noconfirm", "--clean",
         "--distpath", str(ROOT / "dist"),
         "--workpath", str(ROOT / "build"),
-        str(ROOT / "packaging" / "kneeboard.spec"),
+        str(ROOT / "packaging" / "wizzo.spec"),
     )
 
-    folder = ROOT / "dist" / "MiniKneeboard"
-    if not (folder / "MiniKneeboard.exe").is_file():
+    folder = ROOT / "dist" / "Wizzo"
+    if not (folder / "Wizzo.exe").is_file():
         raise SystemExit("the executable was not produced")
 
     # A short read-me beside the exe, because the first thing a stranger does
     # with an unsigned download is look for a reason to trust it.
     (folder / "README.txt").write_text(
-        "Mini Kneeboard {v}\n"
+        "Wizzo {v}\n"
         "{rule}\n\n"
-        "Run MiniKneeboard.exe. No installation, nothing written outside this\n"
+        "Run Wizzo.exe. No installation, nothing written outside this\n"
         "folder except your settings and map caches, which live in:\n"
-        "  %LOCALAPPDATA%\\Kneeboard\n\n"
+        "  %LOCALAPPDATA%\\Wizzo\n\n"
         "The board finds Falcon BMS, DCS World and IL-2 automatically. It reads\n"
         "the files those games already write and never modifies them.\n\n"
         "It serves the board on a local web address, so you can also open it on\n"
         "a tablet or phone on the same network -- the address is shown in the\n"
-        "log file, in %LOCALAPPDATA%\\Kneeboard\\kneeboard.log\n\n"
+        "log file, in %LOCALAPPDATA%\\Wizzo\\wizzo.log\n\n"
         "Windows may warn that the publisher is unrecognised. That is because\n"
         "the executable is not code-signed, not because anything is wrong with\n"
         "it. Source: {repo}\n".format(
@@ -69,12 +69,12 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    archive = ROOT / "dist" / f"MiniKneeboard-{__version__}-win64.zip"
+    archive = ROOT / "dist" / f"Wizzo-{__version__}-win64.zip"
     print(f"  zipping {archive.name}")
     with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
         for path in sorted(folder.rglob("*")):
             if path.is_file():
-                zf.write(path, Path("MiniKneeboard") / path.relative_to(folder))
+                zf.write(path, Path("Wizzo") / path.relative_to(folder))
 
     size = archive.stat().st_size / 1_000_000
     files = sum(1 for p in folder.rglob("*") if p.is_file())

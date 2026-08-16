@@ -1,5 +1,5 @@
 {
-  "_about": "Curated F-16 store reference for the BMS kneeboard. Weights and missile ranges are read live from Falcon4_WCD.xml; this file supplies the employment guidance, delivery profiles, fuzing and laser-code applicability that the game files do not contain. Figures are BMS-practical reference values drawn from the BMS manuals and standard Viper procedures -- treat them as planning guidance, not as certified release tables.",
+  "_about": "Curated F-16 store reference for the Wizzo. Weights and missile ranges are read live from Falcon4_WCD.xml; this file supplies the employment guidance, delivery profiles, fuzing and laser-code applicability that the game files do not contain. Figures are BMS-practical reference values drawn from the BMS manuals and standard Viper procedures -- treat them as planning guidance, not as certified release tables.",
   "laser_codes": {
     "default": "1688",
     "valid_range": "1111 - 1788",

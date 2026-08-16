@@ -4,7 +4,7 @@
     {
       "name": "kneeboard",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["kneeboard.py", "--no-browser", "--port", "5057"],
+      "runtimeArgs": ["wizzo.py", "--no-browser", "--port", "5057"],
       "port": 5057
     }
   ]

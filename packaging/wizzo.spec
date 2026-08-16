@@ -31,7 +31,7 @@ hiddenimports = [
 ]
 
 a = Analysis(
-    [str(ROOT / "kneeboard.py")],
+    [str(ROOT / "wizzo.py")],
     pathex=[str(ROOT)],
     binaries=[],
     datas=datas,
@@ -53,7 +53,7 @@ exe = EXE(
     pyz,
     a.scripts,
     exclude_binaries=True,
-    name="MiniKneeboard",
+    name="Wizzo",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -62,7 +62,7 @@ exe = EXE(
     # file in the state folder instead.
     console=False,
     disable_windowed_traceback=False,
-    icon=str(ROOT / "packaging" / "kneeboard.ico"),
+    icon=str(ROOT / "packaging" / "wizzo.ico"),
 )
 
 coll = COLLECT(
@@ -71,5 +71,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="MiniKneeboard",
+    name="Wizzo",
 )

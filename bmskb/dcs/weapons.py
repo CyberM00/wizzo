@@ -7,9 +7,17 @@ ALQ-184 as a Soviet recon pod; enclosing-block matching reached 35% with
 conflicts; literal declaration arguments were accurate but covered only a
 handful.
 
-So names come from a hand-curated library keyed on CLSID. Anything not in it is
-reported as unknown and shown as its raw code -- the same treatment BMS stores
-without reference data already get.
+So names come from a hand-curated library keyed on CLSID, which carries the
+employment detail as well as the name.
+
+Anything the library does not cover falls back to ``clsidnames``, which reads the
+comment DCS itself writes on the same line as the code in the files it ships.
+That is a name and nothing else -- no employment guidance, no laser
+applicability -- and it is labelled as coming from the game's files rather than
+from curated data, because a developer comment is not a specification.
+
+A code neither can name is shown raw, the same treatment BMS stores without
+reference data already get.
 """
 
 from __future__ import annotations
@@ -17,6 +25,8 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+
+from . import clsidnames
 
 DATA_DIR = Path(__file__).parent / "data"
 
@@ -29,11 +39,19 @@ def _normalise(clsid: str) -> str:
 
 
 class DcsWeaponLibrary:
-    def __init__(self) -> None:
+    def __init__(self, install_base=None) -> None:
         self.stores: list[dict] = []
         self.errors: list[str] = []
         self._by_norm: dict[str, dict] = {}
         self._load()
+        # Names DCS writes about its own codes. Read from the install, so it is
+        # empty when there is no install to read -- in which case unknown codes
+        # are shown raw exactly as before.
+        try:
+            self.from_game = clsidnames.load(install_base)
+        except Exception as exc:  # noqa: BLE001 - a name lookup must never break the board
+            self.from_game = {}
+            self.errors.append(f"Could not read DCS's own store names: {exc}")
 
     def _load(self) -> None:
         path = DATA_DIR / "dcs_stores.json"
@@ -61,10 +79,15 @@ class DcsWeaponLibrary:
                 pass
 
         if not store:
+            # DCS's own comment about this code, when it has one.
+            from_game = self.from_game.get(clsid) or self.from_game.get(clsid.strip("{}"))
             return {
-                "name": clsid,
+                "name": from_game or clsid,
                 "clsid": clsid,
                 "known": False,
+                # Named, but only as far as a developer comment goes: no
+                # employment detail, and the page says where the name came from.
+                "named_by_game": bool(from_game),
                 "category": "",
                 "category_label": "",
                 "guidance": "",
@@ -84,6 +107,7 @@ class DcsWeaponLibrary:
             "name": store.get("name", clsid),
             "clsid": clsid,
             "known": True,
+            "named_by_game": False,
             "category": store.get("category", ""),
             "category_label": store.get("category_label", ""),
             "guidance": store.get("guidance", ""),

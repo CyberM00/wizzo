@@ -1,4 +1,4 @@
-# BMS Kneeboard
+# Wizzo
 
 A second-monitor kneeboard for **Falcon BMS**, **DCS World** and **IL-2 Sturmovik:
 Great Battles**. It reads what the sim already writes, pulls in the matching
@@ -30,12 +30,12 @@ exactly what carries over.
 
 ### The download
 
-Grab the zip from [Releases](https://github.com/CyberM00/bms-kneeboard-helper/releases),
-unzip it anywhere, and run **`MiniKneeboard.exe`**. No Python, no `pip`, no
+Grab the zip from [Releases](https://github.com/CyberM00/wizzo/releases),
+unzip it anywhere, and run **`Wizzo.exe`**. No Python, no `pip`, no
 console — the board opens in its own window.
 
 About 20 MB to download, 39 MB unpacked. It writes nothing into its own folder:
-settings, the map caches and a log go to `%LOCALAPPDATA%\Kneeboard`, so the app
+settings, the map caches and a log go to `%LOCALAPPDATA%\Wizzo`, so the app
 folder can sit anywhere, including somewhere read-only, and deleting it leaves
 nothing behind but that one directory.
 
@@ -46,7 +46,7 @@ it yourself from source with `python packaging/build.py`.
 
 The window is the same board a browser shows, and the server is still running
 behind it, so a tablet or phone on the same network can open the address printed
-in `%LOCALAPPDATA%\Kneeboard\kneeboard.log`. **F11** goes fullscreen in the
+in `%LOCALAPPDATA%\Wizzo\wizzo.log`. **F11** goes fullscreen in the
 window just as it does in a browser.
 
 ### From source
@@ -56,12 +56,12 @@ pip install -r requirements.txt
 ```
 
 ```bash
-python kneeboard.py
+python wizzo.py
 ```
 
 Then drag the browser window to your second monitor and press **F11**.
 
-On Windows you can also just double-click **`start-kneeboard.bat`**.
+On Windows you can also just double-click **`start-wizzo.bat`**.
 
 Run from source the board serves and opens a browser, as it always has. Pass
 `--window` to get the packaged build's desktop window instead, or `--no-window`
@@ -95,7 +95,7 @@ IL-2 Sturmovik 1946, a different game from 2006, as IL-2 Great Battles.
 From the command line, and taking priority over anything saved:
 
 ```bash
-python kneeboard.py --bms-path "D:\Falcon BMS 4.38"
+python wizzo.py --bms-path "D:\Falcon BMS 4.38"
 ```
 
 `--dcs-path` and `--il2-path` do the same, as do the `BMS_PATH`, `DCS_PATH` and
@@ -440,8 +440,8 @@ cannot be picked up as the current mission.
 ## Layout
 
 ```
-kneeboard.py              entry point and Flask routes
-start-kneeboard.bat       double-click launcher
+wizzo.py                  entry point and Flask routes
+start-wizzo.bat       double-click launcher
 bmskb/
   install.py              BMS discovery (registry, env var, drive scan) and encoding handling
   briefing.py             briefing.txt parser
@@ -477,7 +477,7 @@ templates/index.html      page shell
 static/css, static/js     styling and renderer
 packaging/
   build.py                builds and zips the double-click package
-  kneeboard.spec          PyInstaller spec
+  wizzo.spec              PyInstaller spec
   make_icon.py            renders the .ico from the favicon's own path
 ```
 

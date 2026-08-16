@@ -194,15 +194,31 @@ def build(install: DcsInstall, mission_path: Path, weapons: DcsWeaponLibrary) ->
         record["station"] = pylon["station"]
         stores.append(record)
 
-    unknown = sorted({s["clsid"] for s in stores if not s["known"]})
-    if unknown:
+    # Three outcomes, and they are worth telling apart. Curated stores carry
+    # employment detail. Stores named from DCS's own comments carry a name and
+    # nothing else. Anything else is shown as its raw code.
+    from_game = sorted({s["name"] for s in stores if s.get("named_by_game")})
+    unnamed = sorted(
+        {s["clsid"] for s in stores if not s["known"] and not s.get("named_by_game")}
+    )
+    if from_game:
+        warnings.append(
+            {
+                "level": "info",
+                "text": "Named from DCS's own files rather than the curated library: "
+                + ", ".join(from_game)
+                + ". DCS annotates these codes in a comment beside them, which gives a "
+                "name but no employment detail, so those stores show a name only.",
+            }
+        )
+    if unnamed:
         warnings.append(
             {
                 "level": "warn",
                 "text": "No reference data for these pylon codes: "
-                + ", ".join(unknown)
-                + ". DCS does not publish a readable code-to-name table, so these are "
-                "shown as raw codes rather than guessed at.",
+                + ", ".join(unnamed)
+                + ". DCS does not publish a readable code-to-name table and says nothing "
+                "about these, so they are shown as raw codes rather than guessed at.",
             }
         )
 

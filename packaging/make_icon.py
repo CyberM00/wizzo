@@ -97,7 +97,7 @@ def render(size: int, poly: list[tuple[float, float]], ss: int = 8) -> Image.Ima
 def main() -> None:
     poly = flatten(PATH)
     frames = [render(s, poly) for s in SIZES]
-    out = Path(__file__).parent / "kneeboard.ico"
+    out = Path(__file__).parent / "wizzo.ico"
     frames[-1].save(out, format="ICO", sizes=[(s, s) for s in SIZES])
     print(f"wrote {out} with sizes {SIZES}")
 

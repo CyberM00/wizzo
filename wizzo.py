@@ -2,7 +2,7 @@
 
 Run it, then drag the browser window to your second monitor and press F11.
 
-    python kneeboard.py
+    python wizzo.py
 
 The board reads the briefing BMS exports and rebuilds itself whenever that file
 changes, so committing to a new mission is all it takes to refresh.
@@ -311,7 +311,7 @@ def _start_logging() -> Path | None:
     """
     if not FROZEN:
         return None
-    path = state_path("kneeboard.log")
+    path = state_path("wizzo.log")
     try:
         stream = open(path, "w", encoding="utf-8", buffering=1)
     except OSError:
@@ -356,7 +356,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    print(f"Mini Kneeboard {__version__}")
+    print(f"Wizzo {__version__}")
     if log_path:
         print(f"  log:     {log_path}")
 
@@ -479,7 +479,7 @@ def main() -> int:
         print("  Opening the board in its own window.\n")
         # The server keeps running either way -- the window is a front end to it,
         # not a replacement, so a tablet can still open the same board.
-        failed = desktop_run(url, f"Mini Kneeboard {__version__}", serve, port)
+        failed = desktop_run(url, f"Wizzo {__version__}", serve, port)
         if not failed:
             return 0
         print(f"  note:    {failed}; opening a browser instead")

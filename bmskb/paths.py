@@ -23,7 +23,7 @@ FROZEN = bool(getattr(sys, "frozen", False))
 
 # Deliberately not the project's display name: this folder outlives any rename,
 # and moving it would silently orphan a user's settings.
-STATE_DIRNAME = "Kneeboard"
+STATE_DIRNAME = "Wizzo"
 
 
 def resource_root() -> Path:

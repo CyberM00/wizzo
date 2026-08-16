@@ -1,4 +1,4 @@
-/* Falcon BMS kneeboard front end.
+/* Falcon Wizzo front end.
  *
  * Fetches the parsed briefing from /api/state and renders it as tabbed pages.
  * A light /api/token poll detects BMS rewriting briefing.txt and reloads.
@@ -570,7 +570,14 @@ function storeBlock(store, index, prefix) {
   if (store.category_label)
     tags.push(`<span class="tag cyan">${esc(store.category_label)}</span>`);
   if (store.laser) tags.push('<span class="tag amber">LASER CODE</span>');
-  if (!store.known) tags.push('<span class="tag red">NO REF DATA</span>');
+  // Three states, not two. A store named from DCS's own comment is not
+  // unidentified -- it just has a name and no employment detail behind it.
+  if (store.named_by_game)
+    tags.push(
+      '<span class="tag" title="Name read from DCS\'s own files. No employment ' +
+        'detail is published for it.">NAME ONLY</span>'
+    );
+  else if (!store.known) tags.push('<span class="tag red">NO REF DATA</span>');
 
   const body = [];
   if (store.guidance)
@@ -1827,7 +1834,7 @@ function setTab(id) {
  * Text only -- the plane is the favicon, which sits right beside this anyway. */
 function renderTitle() {
   const sim = activeTab === "home" ? "" : SIM_LABELS[(DATA || {}).sim] || "";
-  document.title = `Mini Kneeboard${sim ? ` - ${sim}` : ""}`;
+  document.title = `Wizzo${sim ? ` - ${sim}` : ""}`;
 }
 
 function renderMain() {

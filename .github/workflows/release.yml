@@ -1,0 +1,118 @@
+name: Test and release
+
+# Two reasons this exists rather than building on one machine: the download is an
+# unsigned executable that strangers are asked to trust, and building it in the
+# open means the workflow that produced it is auditable. It also makes "works on
+# my machine" impossible.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-build.txt pytest
+
+      - name: Test
+        # The tests that need a game installed skip here, which is the point:
+        # the rest are the ones that catch an edit breaking the logic.
+        run: python -m pytest tests/ -v
+
+      - name: Check it starts and serves
+        # A build that imports cleanly can still fail to serve. This starts the
+        # real thing on a free port with no games present -- the state every
+        # first-time user is in before they point it at anything.
+        run: |
+          Start-Process -FilePath python -ArgumentList "wizzo.py","--no-browser","--no-window","--no-update","--port","5099" -PassThru | Out-Null
+          $ok = $false
+          foreach ($i in 1..30) {
+            Start-Sleep -Seconds 1
+            try {
+              $r = Invoke-WebRequest -Uri http://127.0.0.1:5099/api/paths -UseBasicParsing -TimeoutSec 3
+              if ($r.StatusCode -eq 200) { $ok = $true; break }
+            } catch { }
+          }
+          if (-not $ok) { throw "the board never answered on port 5099" }
+          Write-Host "served /api/paths"
+          $s = Invoke-WebRequest -Uri http://127.0.0.1:5099/ -UseBasicParsing -TimeoutSec 5
+          if ($s.Content -notmatch "Wizzo") { throw "the page did not render" }
+          Write-Host "served the page"
+
+  build:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-build.txt
+
+      - name: Build the package
+        run: python packaging/build.py
+
+      - name: Name the artefact
+        id: naming
+        run: |
+          $v = python -c "import bmskb; print(bmskb.__version__)"
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+          echo "zip=Wizzo-$v-win64.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Check the built exe actually runs
+        # PyInstaller can produce an executable that fails only once frozen --
+        # a missing hidden import, a data file that did not travel. Better to
+        # find that here than in a download.
+        run: |
+          $exe = "dist/Wizzo/Wizzo.exe"
+          if (-not (Test-Path $exe)) { throw "no executable was produced" }
+          Start-Process -FilePath $exe -ArgumentList "--no-browser","--no-window","--no-update","--port","5098" -PassThru | Out-Null
+          $ok = $false
+          foreach ($i in 1..40) {
+            Start-Sleep -Seconds 1
+            try {
+              $r = Invoke-WebRequest -Uri http://127.0.0.1:5098/api/paths -UseBasicParsing -TimeoutSec 3
+              if ($r.StatusCode -eq 200) { $ok = $true; break }
+            } catch { }
+          }
+          if (-not $ok) {
+            Get-Content "$env:LOCALAPPDATA/Wizzo/wizzo.log" -ErrorAction SilentlyContinue
+            throw "the packaged build never answered"
+          }
+          Write-Host "the packaged build serves"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.naming.outputs.zip }}
+          path: dist/${{ steps.naming.outputs.zip }}
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: gh release upload ${{ github.ref_name }} "dist/${{ steps.naming.outputs.zip }}" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

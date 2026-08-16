@@ -127,7 +127,9 @@ class KneeboardState:
         self.payload: dict | None = None
         self.signature: tuple | None = None
         self.weapons = WeaponLibrary(install.wcd_file if install else None)
-        self.dcs_weapons = DcsWeaponLibrary()
+        # Reads DCS's own comments about its pylon codes, so it has to be rebuilt
+        # when the board is pointed at a different install.
+        self.dcs_weapons = DcsWeaponLibrary(dcs.base if dcs else None)
         # IL-2's tables come out of the game's packed archives. The library loads
         # them lazily on first use, so a user who never opens the IL-2 board pays
         # nothing and a slow disk cannot delay the server starting.
