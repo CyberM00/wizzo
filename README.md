@@ -5,6 +5,21 @@ Great Battles**. It reads what the sim already writes, pulls in the matching
 charts, and turns your loadout into an employment reference — automatically, every
 time you take a new mission.
 
+Named after the WSO — the one in the back seat working the charts, the nav and
+the stores while you fly.
+
+![The mission brief](docs/brief.png)
+
+| | |
+|---|---|
+| ![Loadout](docs/loadout.png) | ![Steerpoints](docs/steer.png) |
+| **Loadout** — every station, with employment detail | **Steer** — the full route with times, headings and altitudes |
+
+![The theatre chart with the flight plan on it](docs/maps.png)
+
+*DCS's own aeronautical chart for the terrain, cropped to the mission, with the
+route, numbered waypoints, airfields and bullseye drawn on it.*
+
 Runs as a small local web server, so the same board also opens on a tablet or
 phone over your LAN.
 
@@ -49,7 +64,25 @@ behind it, so a tablet or phone on the same network can open the address printed
 in `%LOCALAPPDATA%\Wizzo\wizzo.log`. **F11** goes fullscreen in the
 window just as it does in a browser.
 
+### It is reachable from your network
+
+The board serves on all interfaces by default, which is what lets a tablet on the
+same Wi-Fi open it. That also means anyone else on that network can, and what
+they would see is your mission: route, target, loadout, frequencies. On a home
+network that is the point. On a shared or public one it may not be, so bind it to
+the machine only:
+
+```bash
+python wizzo.py --host 127.0.0.1
+```
+
+There is no authentication, and adding some would be pretending the board is
+something it is not. It only ever reads; nothing it serves can change a game file.
+
 ### From source
+
+Python **3.10 or newer** — the code uses `X | None` type syntax throughout. CI
+builds and tests on 3.13.
 
 ```bash
 pip install -r requirements.txt

@@ -1,0 +1,11 @@
+# Normalise line endings. Without this git rewrites CRLF on every commit from a
+# Windows checkout and anyone on Linux or macOS sees the whole file as changed.
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+*.png binary
+*.ico binary
+*.jpg binary
+*.gtp binary

@@ -1,0 +1,8 @@
+# Tool configuration only. The version lives in bmskb/__init__.py and is
+# deliberately not repeated here -- two sources of truth drift.
+
+[tool.pytest.ini_options]
+# Without this the tests only import bmskb when pytest is run from the repo
+# root. With it, "pytest" works from anywhere in the tree.
+pythonpath = ["."]
+testpaths = ["tests"]
