@@ -67,7 +67,7 @@ const val = (text) => {
   return !t || t === "--" ? "" : t;
 };
 
-const dim = (text) => (val(text) ? esc(text) : '<span class="dim">&mdash;</span>');
+const dim = (text) => (val(text) ? esc(text) : '<span class="dim">--</span>');
 
 const card = (title, body, cls = "") =>
   `<div class="card ${cls}">${title ? `<h3>${esc(title)}</h3>` : ""}${body}</div>`;
@@ -76,7 +76,7 @@ const stat = (title, value, sub = "", tone = "") =>
   card(
     title,
     `<div class="value ${tone}${String(value).length > 13 ? " small" : ""}">${
-      val(value) ? esc(value) : "&mdash;"
+      val(value) ? esc(value) : "--"
     }</div>${sub ? `<div class="sub">${esc(sub)}</div>` : ""}`,
     "stat"
   );
@@ -408,7 +408,7 @@ function renderBrief(d) {
           stat("Flight", o.flight, o.role || "", "amber"),
           stat("Package", o.package, o.package_type || ""),
           stat("Time on Target", o.time_on_target, "", "green"),
-          stat("Target", o.target_icao || "—", o.target_area || ""),
+          stat("Target", o.target_icao || "--", o.target_area || ""),
         ]
   ).join("");
 
@@ -426,10 +426,10 @@ function renderBrief(d) {
         ${stat("Theatre", o.theatre, (b.airbases || {}).departure || "")}
       </div>` +
       `<div class="grid c4" style="margin-top:12px">
-        ${stat("Fuel", c.fuel_pct != null ? `${c.fuel_pct}%` : "—", "of internal capacity")}
-        ${stat("MG rounds", r.bullets != null ? String(r.bullets) : "—", "at spawn")}
-        ${stat("Cannon", r.shells != null ? String(r.shells) : "—", "at spawn")}
-        ${stat("Bombs / rockets", `${r.bombs ?? "—"} / ${r.rockets ?? "—"}`, "at spawn")}
+        ${stat("Fuel", c.fuel_pct != null ? `${c.fuel_pct}%` : "--", "of internal capacity")}
+        ${stat("MG rounds", r.bullets != null ? String(r.bullets) : "--", "at spawn")}
+        ${stat("Cannon", r.shells != null ? String(r.shells) : "--", "at spawn")}
+        ${stat("Bombs / rockets", `${r.bombs ?? "--"} / ${r.rockets ?? "--"}`, "at spawn")}
       </div>` +
       `<div class="grid" style="margin-top:12px">${card(
         "Mission Briefing",
@@ -456,10 +456,10 @@ function renderBrief(d) {
       banners(d.warnings) +
       `<div class="grid c4">${cards}</div>` +
       `<div class="grid c4" style="margin-top:12px">
-        ${stat("Fuel", c.fuel_lb ? `${c.fuel_lb.toLocaleString()} lb` : "—", "internal + external")}
-        ${stat("Flares", c.flare != null ? String(c.flare) : "—")}
-        ${stat("Chaff", c.chaff != null ? String(c.chaff) : "—")}
-        ${stat("Gun", c.gun_percent != null ? `${c.gun_percent}%` : "—")}
+        ${stat("Fuel", c.fuel_lb ? `${c.fuel_lb.toLocaleString()} lb` : "--", "internal + external")}
+        ${stat("Flares", c.flare != null ? String(c.flare) : "--")}
+        ${stat("Chaff", c.chaff != null ? String(c.chaff) : "--")}
+        ${stat("Gun", c.gun_percent != null ? `${c.gun_percent}%` : "--")}
       </div>` +
       `<div class="grid" style="margin-top:12px">${card(
         "Mission Briefing",
@@ -493,7 +493,7 @@ function renderBrief(d) {
     dim(e.flight_number),
     esc(e.role),
     esc(e.aircraft),
-    e.timing.map((t) => `${esc(t.label)} ${esc(t.value)}`).join("<br>") || "&mdash;",
+    e.timing.map((t) => `${esc(t.label)} ${esc(t.value)}`).join("<br>") || "--",
     `<span class="wrap">${esc(e.task)}</span>`,
   ]);
 
@@ -544,7 +544,7 @@ const PROVENANCE = {
   bms:
     "Stores are read from the Ordnance section of briefing.txt. Weights and missile " +
     "ranges come from Falcon4_WCD.xml in your BMS install. Range is only shown for " +
-    "missiles &mdash; BMS stores a placeholder value for bombs that would be misleading " +
+    "missiles -- BMS stores a placeholder value for bombs that would be misleading " +
     "as a release range. Employment guidance, fuzing and laser applicability are curated " +
     "reference notes, not game data. External tank weights are dry weights, not fuel loads.",
   dcs:
@@ -554,7 +554,7 @@ const PROVENANCE = {
     "weight or range this board can trust, so those fields stay empty.",
   il2:
     "Store names come from IL-2's own tables inside Scripts.gtp and Swf.gtp, read " +
-    "directly rather than curated &mdash; the payload id in the mission is an index into " +
+    "directly rather than curated -- the payload id in the mission is an index into " +
     "the aircraft's own ammunition list. Quantities use the game's label, cross-checked " +
     "against the ordnance entries behind it. IL-2 publishes no per-store weight or range, " +
     "so those stay empty, and there is no employment guidance to draw on.",
@@ -645,10 +645,10 @@ function renderLoadout(d) {
     // DCS publishes no per-store weight worth trusting, so the slot shows the
     // airframe instead of an empty figure with a misleading caption.
     isDcs(d) || isIl2(d)
-      ? stat("Aircraft", lead.label || "—", "from the mission file")
+      ? stat("Aircraft", lead.label || "--", "from the mission file")
       : stat(
           "Stores Weight",
-          lead.total_weight_lb ? `${lead.total_weight_lb} lb` : "—",
+          lead.total_weight_lb ? `${lead.total_weight_lb} lb` : "--",
           "per aircraft, game data"
         ),
     stat("Store Types", String(lead.stores.length), "distinct stores loaded"),
@@ -658,7 +658,7 @@ function renderLoadout(d) {
           src && src.kind === "as-flown" ? "As Flown" : "Planned",
           (loadout.as_flown || loadout.planned || {}).fuel_pct != null
             ? `${(loadout.as_flown || loadout.planned).fuel_pct}% fuel`
-            : "—",
+            : "--",
           src ? src.confidence : "",
           src && src.kind === "as-flown" ? "green" : "amber"
         )
@@ -690,13 +690,13 @@ function renderLoadout(d) {
             const ac = f.aircraft[0] || { stores: [] };
             return `<div style="margin-bottom:10px"><div style="font-family:var(--mono);color:var(--cyan);margin-bottom:5px">${esc(
               f.callsign
-            )} <span class="dim">&mdash; ${f.aircraft.length} aircraft</span></div>${table(
+            )} <span class="dim">-- ${f.aircraft.length} aircraft</span></div>${table(
               ["Qty", "Store", "Weight", "Range"],
               ac.stores.map((s) => [
                 `${s.count}&times;`,
                 esc(s.name),
-                s.weight_lb ? `${s.weight_lb} lb` : '<span class="dim">&mdash;</span>',
-                s.range_nm ? `${s.range_nm} nm` : '<span class="dim">&mdash;</span>',
+                s.weight_lb ? `${s.weight_lb} lb` : '<span class="dim">--</span>',
+                s.range_nm ? `${s.range_nm} nm` : '<span class="dim">--</span>',
               ])
             )}</div>`;
           })
@@ -722,7 +722,7 @@ function renderLoadout(d) {
     : "";
 
   return (
-    pageHead("Loadout", `${player.callsign} — click a store for employment detail`) +
+    pageHead("Loadout", `${player.callsign} -- click a store for employment detail`) +
     notUniform +
     `<div class="grid c4">${head}</div>` +
     `<div style="margin-top:12px">${stores}</div>` +
@@ -751,13 +751,13 @@ function renderIl2SourcePanel(d, loadout) {
   const rows = [
     [
       "Payload",
-      planned.payload_id != null ? `#${planned.payload_id}` : "&mdash;",
-      flown && flown.payload_id != null ? `#${flown.payload_id}` : "&mdash;",
+      planned.payload_id != null ? `#${planned.payload_id}` : "--",
+      flown && flown.payload_id != null ? `#${flown.payload_id}` : "--",
     ],
     [
       "Fuel",
-      planned.fuel_pct != null ? `${planned.fuel_pct}%` : "&mdash;",
-      flown && flown.fuel_pct != null ? `${flown.fuel_pct}%` : "&mdash;",
+      planned.fuel_pct != null ? `${planned.fuel_pct}%` : "--",
+      flown && flown.fuel_pct != null ? `${flown.fuel_pct}%` : "--",
     ],
   ];
 
@@ -765,7 +765,7 @@ function renderIl2SourcePanel(d, loadout) {
     warning +
     `<div class="grid c2" style="margin-top:12px">
       ${card(
-        src.kind === "as-flown" ? "Source — as flown" : "Source — mission default",
+        src.kind === "as-flown" ? "Source -- as flown" : "Source -- mission default",
         `<div class="hint">${esc(src.note || "")}</div>` +
           (src.raw
             ? `<h5 style="margin:11px 0 4px;font-size:10px;letter-spacing:.12em;` +
@@ -806,7 +806,7 @@ function renderLaserPanel(d) {
 
   return `<div class="grid c2" style="margin-top:12px">
     ${card(
-      needed ? "Laser Code — required by this loadout" : "Laser Code",
+      needed ? "Laser Code -- required by this loadout" : "Laser Code",
       `<div class="laser-row">
         <input class="laser-input" id="laser-code" value="${esc(laser.code || "")}"
                maxlength="4" inputmode="numeric" aria-label="Laser code">
@@ -853,7 +853,7 @@ function renderAircraft(d) {
       .join("");
 
     return (
-      pageHead("Aircraft", airframe ? `${airframe} — from the sim's own data` : "") +
+      pageHead("Aircraft", airframe ? `${airframe} -- from the sim's own data` : "") +
       (cards ? `<div class="grid c4">${cards}</div>` : "") +
       `<div class="grid c2" style="margin-top:12px">${sections}</div>` +
       `<div class="grid" style="margin-top:12px">${card(
@@ -892,13 +892,13 @@ function renderAircraft(d) {
       : '<div class="empty">Nothing listed.</div>';
 
   return (
-    pageHead("Aircraft", airframe ? `${airframe} — manuals from your install` : "") +
+    pageHead("Aircraft", airframe ? `${airframe} -- manuals from your install` : "") +
     `<div class="banner info">${esc(
       (d.sim || "").toUpperCase()
     )} ships aircraft documentation as PDFs rather than as data, so these open as documents. Turning them into performance figures would mean parsing prose, which this board does not guess at.</div>` +
     (matched.length
       ? `<div class="grid" style="margin-top:10px">${card(
-          `For your aircraft${airframe ? ` — ${airframe}` : ""}`,
+          `For your aircraft${airframe ? ` -- ${airframe}` : ""}`,
           docList(matched)
         )}</div>`
       : "") +
@@ -1008,7 +1008,7 @@ function renderComms(d) {
         "Note",
         '<div class="hint">These are the preset channels stored in the mission for your ' +
           "aircraft. DCS has no comm-ladder or IFF-rotation equivalent, so those panels " +
-          "are not shown. Only tanker and AWACS groups are listed above &mdash; DCS group " +
+          "are not shown. Only tanker and AWACS groups are listed above -- DCS group " +
           "tasks do not reliably describe what a generated group actually does, so " +
           "labelling the rest would be guesswork.</div>"
       )}</div>`
@@ -1019,7 +1019,7 @@ function renderComms(d) {
     esc(r.agency),
     val(r.callsign) && r.callsign !== "None"
       ? `<span style="color:var(--cyan)">${esc(r.callsign)}</span>`
-      : '<span class="dim">&mdash;</span>',
+      : '<span class="dim">--</span>',
     dim(r.uhf),
     dim(r.vhf),
     `<span class="wrap dim">${esc(r.notes)}</span>`,
@@ -1059,7 +1059,7 @@ function renderComms(d) {
         : "";
       const stnRows = file.stns.map((s) => [
         `<span style="color:var(--cyan)">${esc(s.label)}</span>`,
-        ...s.values.map((v) => (v === "----" ? '<span class="dim">&mdash;</span>' : esc(v))),
+        ...s.values.map((v) => (v === "----" ? '<span class="dim">--</span>' : esc(v))),
         s.channels.map((c) => `${esc(c.label)} ${esc(c.value)}`).join("<br>"),
       ]);
       return `<div style="margin-bottom:12px"><div style="font-family:var(--mono);color:var(--amber);margin-bottom:6px">${esc(
@@ -1096,7 +1096,7 @@ function renderComms(d) {
       "Note on IFF rotation",
       '<div class="hint">The rotation rows are shown exactly as BMS writes them. ' +
         "BMS does not always emit the same number of values in each row, so the rows " +
-        "are deliberately not zipped into aligned columns &mdash; doing so risks " +
+        "are deliberately not zipped into aligned columns -- doing so risks " +
         "pairing a code with the wrong time block. Read across each row as printed.</div>"
     )}</div>`
   );
@@ -1111,7 +1111,7 @@ function renderThreats(d) {
     `<span style="color:var(--cyan)">${esc(s.callsign)}</span>`,
     s.kind ? `<span class="tag violet">${esc(s.kind)}</span>` : "",
     esc(s.asset),
-    s.tacan ? `<span class="tag green">TCN ${esc(s.tacan)}</span>` : '<span class="dim">&mdash;</span>',
+    s.tacan ? `<span class="tag green">TCN ${esc(s.tacan)}</span>` : '<span class="dim">--</span>',
     `<span class="wrap dim">${esc(s.detail)}</span>`,
   ]);
 
@@ -1273,7 +1273,7 @@ function renderCharts(d) {
       (a) =>
         `<option value="${esc(a.folder)}">${esc(a.name)}${
           a.icao ? ` (${esc(a.icao)})` : ""
-        } — ${esc(a.country)}</option>`
+        } -- ${esc(a.country)}</option>`
     )
     .join("");
 
@@ -1387,7 +1387,7 @@ function taxiCard(entry) {
 
   const extent = `${Math.round(width)} x ${Math.round(height)} m`;
   return card(
-    `${entry.label} — ${entry.airfield}`,
+    `${entry.label} -- ${entry.airfield}`,
     `<svg viewBox="0 0 ${box} ${box}" style="width:100%;height:auto;background:var(--viewer-bg);border-radius:4px">
       <path d="${path}" fill="none" stroke="var(--border-bright)" stroke-width="2"/>
       ${dots}
@@ -1422,7 +1422,7 @@ function renderMaps(d) {
     return (
       pageHead(
         "Maps",
-        `${map.name} — ${map.metres_per_pixel} m per pixel${map.cached ? "" : ", building on first view"}`
+        `${map.name} -- ${map.metres_per_pixel} m per pixel${map.cached ? "" : ", building on first view"}`
       ) +
       `<div class="row-flow" style="margin-bottom:8px">${legend}</div>` +
       theatreMapViewer(map) +
@@ -1455,7 +1455,7 @@ function renderMaps(d) {
       : `${map.metres_per_pixel} m per pixel`;
 
     return (
-      pageHead("Maps", `${map.name} — ${scale}${map.cached ? "" : ", building on first view"}`) +
+      pageHead("Maps", `${map.name} -- ${scale}${map.cached ? "" : ", building on first view"}`) +
       (outline
         ? `<div class="banner">This is the terrain's own land and water outline with a
            latitude and longitude grid over it, not an aeronautical chart.
@@ -1527,7 +1527,7 @@ function alignmentNote(map) {
       after it was built: ${Math.round(a.iou * 100)}% overlap where it is placed,
       against ${Math.round(a.rival_iou * 100)}% at the best of
       ${a.candidates} positions ${(a.shift_m / 1000).toFixed(0)} km
-      away&nbsp;&mdash; ${outcome || a.verdict}.`;
+      away&nbsp;-- ${outcome || a.verdict}.`;
   }
   if (a.reason) return ` The coastline check could not run: ${esc(a.reason)}.`;
   return " The coastline check runs the first time the image is built.";
@@ -1543,7 +1543,7 @@ function bullseyeTable(map) {
       ["#", "Steerpoint", "Bearing", "Range"],
       rows.map((p) => [
         String(p.order),
-        p.label ? esc(p.label) : "&mdash;",
+        p.label ? esc(p.label) : "--",
         `${String(p.bullseye.bearing).padStart(3, "0")}°`,
         `${p.bullseye.range_nm} nm`,
       ])

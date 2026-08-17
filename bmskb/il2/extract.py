@@ -2,10 +2,10 @@
 
 Two members of two archives carry everything needed:
 
-* ``Scripts.gtp`` → ``/luascripts/worldobjects/planes/<code>.txt`` — one script per
+* ``Scripts.gtp`` → ``/luascripts/worldobjects/planes/<code>.txt`` -- one script per
   aircraft, holding ``[Ammunition=N]`` blocks (N *is* the mission file's
   ``PayloadId``) and ``[WeaponMode=N]`` blocks.
-* ``Swf.gtp`` → ``/swf/il2/ammunition/ammunition.locale=<lang>.txt`` — the weapon
+* ``Swf.gtp`` → ``/swf/il2/ammunition/ammunition.locale=<lang>.txt`` -- the weapon
   code to display-name table, one member per language, addressed by path so no
   offset hunting or copy-counting is needed.
 

@@ -323,3 +323,50 @@ def test_the_harm_on_the_hornet_resolves():
     found = lib.lookup("{B06DD79A-F21E-4EB9-BD9D-AB3844618C93}")
     assert found["named_by_game"]
     assert "88" in found["name"]
+
+
+# -- punctuation the project does not use --------------------------------
+
+
+def test_no_em_dashes_anywhere():
+    """No em-dashes or en-dashes in anything this repository ships.
+
+    They depend on every step of the chain reading the encoding correctly, and
+    turn into mojibake when one does not. A spaced double hyphen never does.
+
+    The characters are written as escapes so this file does not trip its own
+    check.
+    """
+    banned = {
+        "\u2014": "em-dash",
+        "\u2013": "en-dash",
+        # Assembled, so the literal entity does not appear in this file.
+        "&" + "mdash;": "an em-dash HTML entity",
+        "&" + "ndash;": "an en-dash HTML entity",
+    }
+    exts = {".py", ".md", ".js", ".css", ".html", ".txt", ".yml", ".yaml",
+            ".toml", ".bat", ".ps1", ".json", ".cfg"}
+    skip_dirs = {".git", "build", "dist", "__pycache__", ".venv", "node_modules"}
+
+    root = Path(__file__).resolve().parent.parent
+    offenders = []
+    for path in root.rglob("*"):
+        if not path.is_file() or path.suffix.lower() not in exts:
+            continue
+        if any(part in skip_dirs for part in path.relative_to(root).parts):
+            continue
+        # Caches are built from the games' own data; their punctuation is theirs.
+        if path.name in {"il2_name_cache.json", "dcs_clsid_names.json"}:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for char, label in banned.items():
+            if char in text:
+                line = text[: text.index(char)].count("\n") + 1
+                offenders.append(
+                    f"{path.relative_to(root)}:{line} contains {label}"
+                )
+
+    assert not offenders, "use ' -- ' instead:\n  " + "\n  ".join(offenders)
