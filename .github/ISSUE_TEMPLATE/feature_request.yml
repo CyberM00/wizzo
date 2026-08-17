@@ -1,0 +1,34 @@
+name: Suggest something
+description: A page, a field, or a sim the board could cover
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Worth knowing before you write: Wizzo only ever reads what a sim already
+        writes to disk. It does not hook a running game, read memory, or talk to
+        an in-game API. If a sim never writes the thing down, the board cannot
+        show it, however useful it would be.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What you want to see
+    validations:
+      required: true
+
+  - type: textarea
+    id: where
+    attributes:
+      label: Where the sim writes it, if you know
+      description: >
+        A file path, or the name of a file you have seen it in. This is the part
+        that decides whether it is possible at all.
+
+  - type: textarea
+    id: why
+    attributes:
+      label: What you would use it for in the cockpit
+      description: >
+        The board is meant to be read at arm's length mid-flight, so what earns
+        space on it is different from what is merely interesting.

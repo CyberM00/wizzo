@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How to run it, and what each sim supports
+    url: https://github.com/CyberM00/wizzo#readme
+    about: The README covers setup, the network warning, and what carries over per sim.
+  - name: Contributing, and the house style
+    url: https://github.com/CyberM00/wizzo/blob/main/CONTRIBUTING.md
+    about: Running from source, the tests, and what a useful bug report contains.

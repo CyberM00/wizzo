@@ -1,0 +1,73 @@
+name: Something is wrong on the board
+description: Wrong data, a missing page, a crash, or a chart in the wrong place
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Most breakage here comes from a game patch moving something Wizzo
+        reads. The more specific you can be about your install, the faster it
+        gets fixed, because I cannot see it from here.
+
+  - type: dropdown
+    id: sim
+    attributes:
+      label: Which sim
+      options:
+        - Falcon BMS
+        - DCS World
+        - IL-2 Great Battles
+        - The sim chooser itself, or something else
+    validations:
+      required: true
+
+  - type: input
+    id: sim-version
+    attributes:
+      label: Sim version
+      description: BMS 4.38, DCS 2.9.28.26385, and so on. The sim chooser shows it.
+    validations:
+      required: true
+
+  - type: input
+    id: wizzo-version
+    attributes:
+      label: Wizzo version
+      description: Bottom left of the sidebar, next to the commit.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how
+    attributes:
+      label: How are you running it
+      options:
+        - The packaged Wizzo.exe from Releases
+        - From source with python wizzo.py
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected instead
+      description: Which page, and what it showed. A screenshot helps for anything visual.
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: The log
+      description: >
+        From `%LOCALAPPDATA%\Wizzo\wizzo.log`. It usually names the file it
+        choked on. Paste the end of it, or the whole thing if it is short.
+      render: text
+
+  - type: textarea
+    id: mission
+    attributes:
+      label: The mission, if it is a loadout or chart problem
+      description: >
+        `.miz` files are zips and often small enough to attach. Check what is
+        in yours first if it came from somewhere you would rather not share.

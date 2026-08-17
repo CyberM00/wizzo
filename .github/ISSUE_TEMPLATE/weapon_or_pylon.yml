@@ -1,0 +1,57 @@
+name: A store is unnamed or named wrong
+description: A pylon reading as a raw code, a missing employment note, or a wrong name
+labels: ["data"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two different things can cause this, and they are worth telling apart.
+
+        A station showing a raw code like
+        `{B06DD79A-F21E-4EB9-BD9D-AB3844618C93}` means neither the curated
+        library nor the game's own comments named it. A station named but tagged
+        `NAME ONLY` means the name came from the game's files and no employment
+        detail exists for it yet. A station named *wrongly* is the worst of the
+        three, and the one most worth reporting.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Which is it
+      options:
+        - A raw code with no name at all
+        - Named, but tagged NAME ONLY, and the employment detail would help
+        - Named wrongly
+    validations:
+      required: true
+
+  - type: input
+    id: code
+    attributes:
+      label: The code or name shown
+      description: Copy it exactly, braces and all.
+    validations:
+      required: true
+
+  - type: input
+    id: aircraft
+    attributes:
+      label: Aircraft and station
+      description: For example, F/A-18C, stations 2 and 8.
+    validations:
+      required: true
+
+  - type: input
+    id: correct
+    attributes:
+      label: What it should say
+      description: >
+        If you know the real store, name it. If you know where the game states
+        it, that is even better.
+
+  - type: input
+    id: sim-version
+    attributes:
+      label: Sim version
+    validations:
+      required: true
