@@ -14,3 +14,4 @@ build/
 dist/
 packaging/wizzo.ico
 dcs_clsid_names.json
+.claude/

@@ -228,7 +228,7 @@ def check_release(current: str, enabled: bool = True) -> dict:
     outcome["attempted"] = True
     request = urllib.request.Request(
         RELEASES_URL,
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "bms-kneeboard"},
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "wizzo"},
     )
     try:
         with urllib.request.urlopen(request, timeout=RELEASE_TIMEOUT) as response:
