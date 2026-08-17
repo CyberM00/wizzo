@@ -23,6 +23,21 @@ route, numbered waypoints, airfields and bullseye drawn on it.*
 Runs as a small local web server, so the same board also opens on a tablet or
 phone over your LAN.
 
+> ### Only want it on another device?
+>
+> **[Wizzo Server](https://github.com/CyberM00/wizzo-server)** is the same board
+> with the desktop half removed: no window, no installer, no GUI dependencies.
+> It is the shape this project started as, kept as a separate option because it
+> suits a different setup.
+>
+> Reach for it if the board lives on a tablet rather than a second monitor, if
+> you want it running as a service that starts with the machine, or if you want
+> it in a container. It runs headless and on Linux, which this build does not.
+> Both read the same files and show the same pages.
+>
+> Same caveat as here, and it matters more there: it is for a network you trust.
+> No password, no TLS, not for the internet.
+
 ## Which sim it shows
 
 The board opens on a **sim chooser**: one card per sim showing whether it was
@@ -78,6 +93,11 @@ python wizzo.py --host 127.0.0.1
 
 There is no authentication, and adding some would be pretending the board is
 something it is not. It only ever reads; nothing it serves can change a game file.
+
+If reading it on another device is the whole reason you are here, the window and
+the installer are dead weight:
+[Wizzo Server](https://github.com/CyberM00/wizzo-server) is this without them,
+and can run as a service so it is already up when you sit down.
 
 ### From source
 
