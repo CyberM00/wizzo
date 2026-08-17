@@ -19,12 +19,18 @@ permissions:
 jobs:
   test:
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The README tells people 3.10 or newer works. Both ends of that claim
+        # get tested, so it stays a fact rather than an assumption.
+        python-version: ["3.10", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "${{ matrix.python-version }}"
           cache: pip
 
       - name: Install
