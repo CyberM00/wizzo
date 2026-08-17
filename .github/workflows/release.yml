@@ -26,9 +26,9 @@ jobs:
         # get tested, so it stays a fact rather than an assumption.
         python-version: ["3.10", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "${{ matrix.python-version }}"
           cache: pip
@@ -67,9 +67,9 @@ jobs:
     needs: test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -111,7 +111,7 @@ jobs:
           }
           Write-Host "the packaged build serves"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.naming.outputs.zip }}
           path: dist/${{ steps.naming.outputs.zip }}
